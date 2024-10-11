@@ -32,10 +32,10 @@ jobs:
             --window-pos 200 120 \
             --window-size 800 400 \
             --icon-size 100 \
-            --icon "YourApp.app" 200 190 \
+            --icon "ClipPocket_.app" 200 190 \
             --hide-extension "ClipPocket_.app" \
             --app-drop-link 600 185 \
-            "YourApp.dmg" \
+            "ClipPocket_.dmg" \
             "build/Release/ClipPocket_.app"
 
       - name: Create GitHub Release

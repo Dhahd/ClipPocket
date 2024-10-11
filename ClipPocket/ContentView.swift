@@ -1,24 +1,24 @@
+////
+////  ContentView.swift
+////  ClipPocket
+////
+////  Created by Shaneen on 10/11/24.
+////
 //
-//  ContentView.swift
-//  ClipPocket
+//import SwiftUI
 //
-//  Created by Shaneen on 10/11/24.
+//struct ContentView: View {
+//    var body: some View {
+//        VStack {
+//            Image(systemName: "globe")
+//                .imageScale(.large)
+//                .foregroundStyle(.tint)
+//            Text("Hello, world!")
+//        }
+//        .padding()
+//    }
+//}
 //
-
-import SwiftUI
-
-struct ContentView: View {
-    var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
-        }
-        .padding()
-    }
-}
-
-#Preview {
-    ContentView()
-}
+//#Preview {
+//    ContentView()
+//}

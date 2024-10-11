@@ -9,6 +9,10 @@
    Copyright (c) 2024 ___ORGANIZATIONNAME___. All rights reserved.
 -->
 <plist version="1.0">
+    <key>method</key>
+    <string>mac-application</string>
+    <key>teamID</key>
+    <string>shaneendhahd@gmail.com</string>
     <key>LSUIElement</key>
     <true/>
     <key>NSAppleEventsUsageDescription</key>

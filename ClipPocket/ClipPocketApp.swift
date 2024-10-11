@@ -170,8 +170,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
        func setupClipboardManager() {
            let screenRect = NSScreen.main?.visibleFrame ?? .zero
-           let windowHeight: CGFloat = 230
-           let windowWidth: CGFloat = screenRect.width - 100  // Subtracting 100 to give some padding
+           let windowHeight: CGFloat = 300
+           let windowWidth: CGFloat = screenRect.width  // Subtracting 100 to give some padding
            
            // Calculate the x position to center the window
            let xPosition = (screenRect.width - windowWidth) / 20
@@ -307,17 +307,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             statusItem?.menu = menu
         }
     
-    func addClipboardItem(_ item: ClipboardItem) {
-        DispatchQueue.main.async {
-            if !self.clipboardItems.contains(where: { $0.isEqual(to: item) }) {
-                self.clipboardItems.insert(item, at: 0)
-                print("Added new item. Total items: \(self.clipboardItems.count)")
-                //                   self.clipboardMenuView?.updateItems()
-            } else {
-                print("Item already exists in clipboard history")
-            }
-        }
-    }
+   
     
     @objc func openSettings() {
         if settingsWindow == nil {
@@ -341,64 +331,57 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     }
     
     func checkClipboard() {
-        let pasteboard = NSPasteboard.general
-        guard pasteboard.changeCount != lastChangeCount && !isInternalCopy else { return }
-        
-        lastChangeCount = pasteboard.changeCount
-        print("--- Clipboard Changed ---")
-        print("Available types: \(pasteboard.types?.map { $0.rawValue } ?? [])")
-        
-        if let item = readClipboardItem(from: pasteboard) {
-            addClipboardItem(item)
-        } else {
-            print("Unable to read clipboard content")
+            let pasteboard = NSPasteboard.general
+            guard pasteboard.changeCount != lastChangeCount && !isInternalCopy else { return }
+
+            lastChangeCount = pasteboard.changeCount
+
+            // Capture the frontmost application immediately when a change is detected
+            let sourceApp = NSWorkspace.shared.frontmostApplication
+
+            if let item = readClipboardItem(from: pasteboard, sourceApp: sourceApp) {
+                addClipboardItem(item)
+            }
         }
-        
-        print("--- End of Clipboard Change ---")
-    }
     
-    func readClipboardItem(from pasteboard: NSPasteboard) -> ClipboardItem? {
+   
+    func readClipboardItem(from pasteboard: NSPasteboard, sourceApp: NSRunningApplication?) -> ClipboardItem? {
         // Check for image
         if let image = NSImage(pasteboard: pasteboard) {
-            print("Image found. Size: \(image.size)")
             if let tiffData = image.tiffRepresentation {
-                return ClipboardItem(content: tiffData, type: .image)
+                return ClipboardItem(content: tiffData, type: .image, timestamp: Date(), sourceApplication: sourceApp)
             }
         }
-        
+
         // Check for text
         if let string = pasteboard.string(forType: .string) {
-            print("Text found: \(string.prefix(50))...")
-            
             // Check if it's a color (simple hex check)
             if string.matches(regex: "^#(?:[0-9a-fA-F]{3}){1,2}$") {
-                return ClipboardItem(content: string, type: .color)
+                return ClipboardItem(content: string, type: .color, timestamp: Date(), sourceApplication: sourceApp)
             }
-            
+
             // Check if it's code (simple check for common programming keywords)
             let codeKeywords = ["func", "class", "struct", "var", "let", "if", "else", "for", "while", "return"]
             if codeKeywords.contains(where: { string.contains($0) }) {
-                return ClipboardItem(content: string, type: .code)
+                return ClipboardItem(content: string, type: .code, timestamp: Date(), sourceApplication: sourceApp)
             }
-            
-            return ClipboardItem(content: string, type: .text)
+
+            // If it's not a color or code, treat it as plain text
+            return ClipboardItem(content: string, type: .text, timestamp: Date(), sourceApplication: sourceApp)
         }
-        
-        // Check for file URL
-        if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL] {
-            for url in urls {
-                print("File URL found: \(url.absoluteString)")
-                if let imageData = try? Data(contentsOf: url), let image = NSImage(data: imageData) {
-                    print("Image loaded from URL")
-                    return ClipboardItem(content: imageData, type: .image)
-                }
-            }
-        }
-        
+
         return nil
     }
 
- 
+    func addClipboardItem(_ item: ClipboardItem) {
+        DispatchQueue.main.async {
+            if !self.clipboardItems.contains(where: { $0.isEqual(to: item) }) {
+                self.clipboardItems.insert(item, at: 0)
+            }
+        }
+    }
+
+
     func copyItemToClipboard(_ item: ClipboardItem) {
         isInternalCopy = true
         let pasteboard = NSPasteboard.general
@@ -434,31 +417,51 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             self.isInternalCopy = false
         }
     }
-    
 }
+
 struct ClipboardItem: Identifiable {
     let id = UUID()
-    enum ItemType {
-        case text
-        case image
-        case color
-        case code
-    }
-    
-    let content: Any
-    let type: ItemType
-    
+      let content: Any
+      let type: ItemType
+      let timestamp: Date
+      let sourceApplication: NSRunningApplication?
+      let sourceIcon: NSImage?
+
+      init(content: Any, type: ItemType, timestamp: Date, sourceApplication: NSRunningApplication?) {
+          self.content = content
+          self.type = type
+          self.timestamp = timestamp
+          self.sourceApplication = sourceApplication
+          self.sourceIcon = sourceApplication?.icon
+      }
+
+      enum ItemType: String {
+          case text = "Text"
+          case image = "Image"
+          case color = "Color"
+          case code = "Code"
+      }
+
     var displayString: String {
         switch type {
         case .text, .code:
-            let text = content as! String
-            return text.prefix(100) + (text.count > 100 ? "..." : "")
+            return String((content as? String)?.prefix(100) ?? "Invalid Text")
         case .image:
             return "Image"
         case .color:
             return content as? String ?? "Invalid Color"
         }
     }
+
+    var icon: String {
+        switch type {
+        case .text: return "doc.text"
+        case .image: return "photo"
+        case .color: return "paintpalette"
+        case .code: return "chevron.left.forwardslash.chevron.right"
+        }
+    }
+
     
     func isEqual(to other: ClipboardItem) -> Bool {
         switch (self.type, other.type) {
@@ -475,6 +478,7 @@ struct ClipboardItem: Identifiable {
         }
     }
 }
+
 extension String {
     func matches(regex: String) -> Bool {
         return self.range(of: regex, options: .regularExpression) != nil

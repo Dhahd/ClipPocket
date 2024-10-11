@@ -34,161 +34,104 @@ struct ClipboardMenuView: View {
     }
 }
 
+
+
+import SwiftUI
+
 struct ClipboardItemView: View {
     let item: ClipboardItem
     
     var body: some View {
-        VStack {
-            switch item.type {
-            case .text:
-                textView
-            case .image:
-                imageView
-            case .color:
-                colorView
-            case .code:
-                codeView
+        VStack(alignment: .leading, spacing: 8) {
+            // Header with source app icon
+            HStack {
+                Text(item.type.rawValue)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                Spacer()
+                sourceAppIcon
+            }
+            
+            // Content
+            contentView
+            
+            // Footer
+            HStack {
+                Image(systemName: item.icon)
+                    .foregroundColor(.secondary)
+                if item.type != .image {
+                    Text("\(item.displayString.count)")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+                Text(item.timestamp, style: .relative)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
             }
         }
-        .frame(width: 180, height: 100)
-        .background(backgroundForType)
+        .padding(10)
+        .frame(width: 200, height: 150)
+        .background(Color(.textBackgroundColor))
         .cornerRadius(10)
         .overlay(
             RoundedRectangle(cornerRadius: 10)
-                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
         )
     }
     
-    private var textView: some View {
-        Text(item.displayString)
-            .font(.system(size: 12))
-            .padding(5)
-            .lineLimit(4)
-    }
-    
-    private var imageView: some View {
+    private var sourceAppIcon: some View {
         Group {
-            if let imageData = item.content as? Data,
-               let nsImage = NSImage(data: imageData) {
-                Image(nsImage: nsImage)
+            if let icon = item.sourceApplication?.icon {
+                Image(nsImage: icon)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(width: 170, height: 90)
+                    .frame(width: 30, height: 30)
             } else {
-                Text("Invalid Image")
-                    .font(.caption)
-                    .foregroundColor(.red)
+                Image(systemName: "app.dashed")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 30, height: 30)
+                    .foregroundColor(.secondary)
             }
         }
     }
     
-    private var colorView: some View {
+    private var contentView: some View {
         Group {
-            if let colorString = item.content as? String,
-               let color = Color(hex: colorString) {
-                let textColor = color.contrastingTextColor(_color: item.content as! String) // Choose light or dark text based on background color
-                
-                VStack {
-                    Rectangle()
-                        .fill(color)
-                        .frame(width: 170, height: 70)
-                    Text(colorString)
-                        .font(.caption)
-                        .foregroundColor(textColor)
-                        .multilineTextAlignment(.center) // Center the text
+            switch item.type {
+            case .text, .code:
+                Text(item.displayString)
+                    .lineLimit(4)
+                    .font(.system(size: 12, design: .monospaced))
+            case .image:
+                if let imageData = item.content as? Data,
+                   let nsImage = NSImage(data: imageData) {
+                    Image(nsImage: nsImage)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxHeight: 80)
+                } else {
+                    Text("Invalid Image")
+                        .foregroundColor(.red)
                 }
-            } else {
-                Text("Invalid Color")
-                    .font(.caption)
-                    .foregroundColor(.red)
-                    .multilineTextAlignment(.center)
-            }
-        }
-        .frame(width: 180, height: 100)
-    }
-    
-    private var codeView: some View {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack {
-                    Circle()
-                        .fill(Color.red)
-                        .frame(width: 10, height: 10)
-                    Circle()
-                        .fill(Color.yellow)
-                        .frame(width: 10, height: 10)
-                    Circle()
-                        .fill(Color.green)
-                        .frame(width: 10, height: 10)
-                    Spacer()
-                    Text("Code Snippet")
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary)
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color(hex: "#2b2b2b"))
-                
-                ScrollView {
-                    Text(applySyntaxHighlighting(to: item.displayString))
-                        .font(.system(size: 10, design: .monospaced))
-                        .padding(8)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-            .background(Color(hex: "#1e1e1e"))
-            .cornerRadius(8)
-        }
-    
-    private func applySyntaxHighlighting(to code: String) -> AttributedString {
-            var attributedString = AttributedString(code)
-            
-            let keywords = ["func", "var", "let", "if", "else", "for", "while", "return", "class", "struct", "enum"]
-            let types = ["String", "Int", "Double", "Bool", "Array", "Dictionary"]
-            
-            for keyword in keywords {
-                if let range = attributedString.range(of: keyword) {
-                    attributedString[range].foregroundColor = .purple
-                    attributedString[range].font = .system(size: 10, weight: .bold, design: .monospaced)
-                }
-            }
-            
-            for type in types {
-                if let range = attributedString.range(of: type) {
-                    attributedString[range].foregroundColor = .blue
-                }
-            }
-            
-            // Highlight string literals
-            let stringPattern = "\"[^\"]*\""
-            if let regex = try? NSRegularExpression(pattern: stringPattern) {
-                let nsRange = NSRange(code.startIndex..., in: code)
-                for match in regex.matches(in: code, options: [], range: nsRange) {
-                    if let range = Range(match.range, in: code) {
-                        let matchedString = String(code[range])
-                        if let attributedRange = attributedString.range(of: matchedString) {
-                            attributedString[attributedRange].foregroundColor = .green
-                        }
+            case .color:
+                if let colorString = item.content as? String,
+                   let color = Color(hex: colorString) {
+                    HStack {
+                        Rectangle()
+                            .fill(color)
+                            .frame(width: 20, height: 20)
+                        Text(colorString)
+                            .font(.caption2)
                     }
-                }
-            }
-            
-            return attributedString
-        }
-    
-    private var backgroundForType: some View {
-            Group {
-                switch item.type {
-                case .text:
-                    Color(NSColor.textBackgroundColor)
-                case .image:
-                    Color(NSColor.windowBackgroundColor)
-                case .color:
-                    Color(NSColor.windowBackgroundColor)
-                case .code:
-                    Color(hex: "#1e1e1e") // Dark background for code
+                } else {
+                    Text("Invalid Color")
+                        .foregroundColor(.red)
                 }
             }
         }
+    }
 }
 
 extension Color {

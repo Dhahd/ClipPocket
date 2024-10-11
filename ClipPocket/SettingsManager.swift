@@ -1,6 +1,7 @@
 import Foundation
+import Combine
 
-class SettingsManager {
+class SettingsManager: ObservableObject {
     static let shared = SettingsManager()
     
     private let defaults = UserDefaults.standard
@@ -11,19 +12,24 @@ class SettingsManager {
         // Add any other settings keys here
     }
     
-    var launchAtLogin: Bool {
-        get { defaults.bool(forKey: Keys.launchAtLogin) }
-        set { defaults.set(newValue, forKey: Keys.launchAtLogin) }
+    @Published var launchAtLogin: Bool {
+        didSet {
+            defaults.set(launchAtLogin, forKey: Keys.launchAtLogin)
+        }
     }
     
-    var shortcut: String {
-        get { defaults.string(forKey: Keys.shortcut) ?? "" }
-        set { defaults.set(newValue, forKey: Keys.shortcut) }
+    @Published var shortcut: String {
+        didSet {
+            defaults.set(shortcut, forKey: Keys.shortcut)
+        }
     }
     
     // Add any other settings properties here
     
-    private init() {}
+    private init() {
+        self.launchAtLogin = defaults.bool(forKey: Keys.launchAtLogin)
+        self.shortcut = defaults.string(forKey: Keys.shortcut) ?? ""
+    }
     
     func resetToDefaults() {
         launchAtLogin = false

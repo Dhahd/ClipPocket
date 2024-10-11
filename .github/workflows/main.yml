@@ -16,7 +16,7 @@ jobs:
     - name: Set up Node.js (if applicable, or replace with your build setup)
       uses: actions/setup-node@v3
       with:
-        node-version: '14'
+        node-version: '18'  # Use Node.js version 18 for arm64 compatibility
 
     - name: Install dependencies
       run: npm install  # Change this to your project’s installation command
@@ -31,8 +31,8 @@ jobs:
     - name: Upload DMG Artifact (optional)
       uses: actions/upload-artifact@v3
       with:
-        name: your-app.dmg
-        path: ./your-app.dmg  # Adjust the path to match your DMG file location
+        name: ClipPocket.dmg
+        path: ./ClipPocket.dmg  # Adjust the path to match your DMG file location
 
     - name: Create GitHub Release
       id: create_release
@@ -49,6 +49,6 @@ jobs:
       uses: actions/upload-release-asset@v1
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./your-app.dmg
-        asset_name: your-app.dmg
+        asset_path: ./ClipPocket.dmg
+        asset_name: ClipPocket.dmg
         asset_content_type: application/octet-stream

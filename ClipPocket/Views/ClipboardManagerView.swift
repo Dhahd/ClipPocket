@@ -17,6 +17,7 @@ struct ClipboardManagerContent: View {
     @EnvironmentObject var appDelegate: AppDelegate
     @State private var hoveredItemId: UUID?
     @State private var searchText: String = ""
+    @StateObject private var dragDropManager = DragDropManager()
     
     var filteredItems: [ClipboardItem] {
         if searchText.isEmpty {
@@ -31,7 +32,6 @@ struct ClipboardManagerContent: View {
     var body: some View {
         GeometryReader { geometry in
             VStack(spacing: 0) {
-                // Top bar with search, sections, and buttons
                 HStack {
                     SearchBar(text: $searchText)
                         .frame(width: 200)
@@ -70,6 +70,7 @@ struct ClipboardManagerContent: View {
                                     appDelegate.copyItemToClipboard(item)
                                     NSApp.sendAction(#selector(AppDelegate.hideClipboardManager), to: nil, from: nil)
                                 }
+                            
                         }
                     }
                     .padding()

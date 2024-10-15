@@ -1,4 +1,12 @@
+//
+//  SyntaxHighlightedCodeView.swift
+//  ClipPocket
+//
+//  Created by Shaneen on 10/14/24.
+//
 
+import SwiftUICore
+import SwiftUI
 
 struct SyntaxHighlightedCodeView: View {
     let code: String

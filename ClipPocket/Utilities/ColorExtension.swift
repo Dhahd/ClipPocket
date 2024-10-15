@@ -10,6 +10,8 @@
 // Extension to create Color from NSImage
 
 import CoreImage
+import SwiftUICore
+import AppKit
 
 
 extension Color {
@@ -17,7 +19,7 @@ extension Color {
         let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil)!
         let inputImage = CIImage(cgImage: cgImage)
         let extentVector = CIVector(x: inputImage.extent.origin.x, y: inputImage.extent.origin.y, z: inputImage.extent.size.width, w: inputImage.extent.size.height)
-
+        
         guard let filter = CIFilter(name: "CIAreaAverage", parameters: [kCIInputImageKey: inputImage, kCIInputExtentKey: extentVector]) else {
             self.init(.blue) // Fallback color
             return
@@ -26,32 +28,52 @@ extension Color {
             self.init(.blue) // Fallback color
             return
         }
-
+        
         var bitmap = [UInt8](repeating: 0, count: 4)
         let context = CIContext(options: [.workingColorSpace: kCFNull!])
         context.render(outputImage, toBitmap: &bitmap, rowBytes: 4, bounds: CGRect(x: 0, y: 0, width: 1, height: 1), format: .RGBA8, colorSpace: nil)
-
+        
         // Convert to HSB
         var hue: CGFloat = 0
         var saturation: CGFloat = 0
         var brightness: CGFloat = 0
         NSColor(red: CGFloat(bitmap[0]) / 255, green: CGFloat(bitmap[1]) / 255, blue: CGFloat(bitmap[2]) / 255, alpha: 1).getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: nil)
-
+        
         // Adjust HSB values for more vibrant colors
         saturation = min(saturation * 1.7, 1.0)  // Increase saturation by 70%
         brightness = min(brightness * 1.3, 1.0)  // Increase brightness by 30%
-
+        
         // Convert back to RGB
         let color = NSColor(hue: hue, saturation: saturation, brightness: brightness, alpha: 1)
         var red: CGFloat = 0
         var green: CGFloat = 0
         var blue: CGFloat = 0
         color.getRed(&red, green: &green, blue: &blue, alpha: nil)
-
+        
         // Set the final color
         self.init(red: Double(red), green: Double(green), blue: Double(blue))
     }
+    
+    func contrastingTextColor(_ colorString: String) -> Color {
+        let luminance = self.luminance(colorString)
+        return luminance > 0.5 ? .black : .white
+    }
+    
+    func luminance(_ colorString: String) -> Double {
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        
+        if let color = NSColor(hex: colorString) {
+            red = color.redComponent
+            green = color.greenComponent
+            blue = color.blueComponent
+        }
+        
+        return 0.299 * Double(red) + 0.587 * Double(green) + 0.114 * Double(blue)
+    }
 }
+
 
 extension NSColor {
     convenience init?(hex: String) {

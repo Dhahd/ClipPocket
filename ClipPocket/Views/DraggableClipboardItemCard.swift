@@ -8,20 +8,20 @@
 import SwiftUICore
 import SwiftUI
 import AppKit
-
-
+import UniformTypeIdentifiers
 
 struct DraggableClipboardItemCard: View {
     let item: ClipboardItem
     @EnvironmentObject var dragDropManager: DragDropManager
+    @EnvironmentObject var appDelegate: AppDelegate
+    var isBeingDragged = false
     
     var body: some View {
         ClipboardItemCard(item: item)
             .onDrag {
+                appDelegate.toggleClipboardManager()
                 self.dragDropManager.draggedItem = self.item
-                
                 let provider = NSItemProvider()
-                
                 switch item.type {
                 case .text, .code, .color:
                     if let stringContent = item.content as? String {

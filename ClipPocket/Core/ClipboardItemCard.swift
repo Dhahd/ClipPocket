@@ -138,6 +138,7 @@ class ClipboardItemWrapper: NSObject, NSItemProviderWriting, NSItemProviderReadi
         }
     
     func loadData(withTypeIdentifier typeIdentifier: String, forItemProviderCompletionHandler completionHandler: @escaping (Data?, Error?) -> Void) -> Progress? {
+        
         switch item.type {
         case .text, .code, .color:
             if typeIdentifier == UTType.utf8PlainText.identifier,
@@ -161,7 +162,6 @@ class ClipboardItemWrapper: NSObject, NSItemProviderWriting, NSItemProviderReadi
     static func object(withItemProviderData data: Data, typeIdentifier: String) throws -> Self {
             let content: Any
             let type: ClipboardItem.ItemType
-            
             if typeIdentifier == UTType.utf8PlainText.identifier {
                 guard let string = String(data: data, encoding: .utf8) else {
                     throw NSError(domain: "ClipboardItemError", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to decode text data"])

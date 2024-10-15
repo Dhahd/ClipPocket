@@ -17,6 +17,7 @@ struct SettingsView: View {
                     .onChange(of: settingsManager.launchAtLogin) { _, newValue in
                         setLaunchAtLogin(newValue)
                     }
+
             }
             
             Section {

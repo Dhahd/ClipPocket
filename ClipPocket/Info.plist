@@ -1,21 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-
-<!--
-   Info.plist
-   ClipPocket
-
-   Created by Shaneen on 10/11/24.
-   Copyright (c) 2024 ___ORGANIZATIONNAME___. All rights reserved.
--->
 <plist version="1.0">
-    <key>method</key>
-    <string>mac-application</string>
-    <key>teamID</key>
-    <string>shaneendhahd@gmail.com</string>
+<dict>
     <key>LSUIElement</key>
     <true/>
     <key>NSAppleEventsUsageDescription</key>
-    <string>ClipPocket needs access to monitor keyboard events to respond to the global shortcut for showing the clipboard manager.</string>
-<dict/>
+    <string>ClipPocket needs to control other applications to monitor clipboard changes and provide global shortcuts.</string>
+</dict>
 </plist>

@@ -1,0 +1,58 @@
+name: Build and Release ClipPocket
+
+on:
+  push:
+    tags:
+      - 'v*' # Triggers on push of tags like v1.0.0, v2.1.0, etc.
+
+jobs:
+  build-and-release:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Build ClipPocket
+        run: |
+          xcodebuild clean archive -project ClipPocket.xcodeproj -scheme ClipPocket -configuration Release -archivePath ClipPocket.xcarchive
+          xcodebuild -exportArchive -archivePath ClipPocket.xcarchive -exportOptionsPlist ExportOptions.plist -exportPath ./
+
+      - name: Create DMG
+        run: |
+          brew install create-dmg
+          create-dmg \
+            --volname "ClipPocket" \
+            --window-pos 200 120 \
+            --window-size 800 400 \
+            --icon-size 100 \
+            --icon "ClipPocket.app" 200 190 \
+            --hide-extension "ClipPocket.app" \
+            --app-drop-link 600 185 \
+            "ClipPocket.dmg" \
+            "./ClipPocket.app"
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: ClipPocket ${{ github.ref }}
+          draft: false
+          prerelease: false
+
+      - name: Upload DMG to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./ClipPocket.dmg
+          asset_name: ClipPocket.dmg
+          asset_content_type: application/x-apple-diskimage

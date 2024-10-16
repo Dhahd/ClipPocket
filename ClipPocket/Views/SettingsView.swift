@@ -13,10 +13,13 @@ struct SettingsView: View {
                 }
                 .padding(.vertical, 5)
                 
-                Toggle("Launch at login", isOn: $settingsManager.launchAtLogin)
-                    .onChange(of: settingsManager.launchAtLogin) { _, newValue in
+                Toggle("Launch at login", isOn: Binding(
+                    get: { settingsManager.launchAtLogin },
+                    set: { newValue in
+                        settingsManager.launchAtLogin = newValue
                         setLaunchAtLogin(newValue)
                     }
+                ))
 
             }
             

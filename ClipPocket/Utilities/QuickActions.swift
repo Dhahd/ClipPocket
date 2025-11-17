@@ -1,6 +1,7 @@
 import Foundation
 import AppKit
 import CoreImage
+import UniformTypeIdentifiers
 import UserNotifications
 
 class QuickActions {
@@ -12,8 +13,9 @@ class QuickActions {
     func exportToFile(_ item: ClipboardItem) {
         DispatchQueue.main.async {
             let savePanel = NSSavePanel()
-            savePanel.nameFieldStringValue = self.getFileName(for: item)
-            savePanel.allowedContentTypes = [.plainText, .data]
+            let exportInfo = self.exportInfo(for: item)
+            savePanel.nameFieldStringValue = exportInfo.fileName
+            savePanel.allowedContentTypes = exportInfo.allowedTypes
 
             savePanel.begin { response in
                 if response == .OK, let url = savePanel.url {
@@ -23,22 +25,26 @@ class QuickActions {
         }
     }
 
-    private func getFileName(for item: ClipboardItem) -> String {
+    private func exportInfo(for item: ClipboardItem) -> (fileName: String, allowedTypes: [UTType]) {
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd-HHmmss"
         let dateString = dateFormatter.string(from: item.timestamp)
 
         switch item.type {
         case .text, .code, .json:
-            return "clipboard-\(dateString).txt"
+            return ("clipboard-\(dateString).txt", [.plainText, .utf8PlainText])
         case .image:
-            return "clipboard-\(dateString).png"
+            return ("clipboard-\(dateString).png", [.png])
         case .url, .email, .phone:
-            return "clipboard-\(dateString).txt"
+            return ("clipboard-\(dateString).txt", [.plainText, .utf8PlainText])
         case .color:
-            return "clipboard-\(dateString).txt"
+            return ("clipboard-\(dateString).txt", [.plainText, .utf8PlainText])
         case .file:
-            return "clipboard-\(dateString).txt"
+            if let fileURL = item.content as? URL {
+                let utType = UTType(filenameExtension: fileURL.pathExtension) ?? .data
+                return (fileURL.lastPathComponent, [utType])
+            }
+            return ("clipboard-\(dateString).txt", [.data])
         }
     }
 
@@ -48,15 +54,29 @@ class QuickActions {
             case .text, .code, .url, .email, .phone, .json, .color:
                 if let text = item.content as? String {
                     try text.write(to: url, atomically: true, encoding: .utf8)
+                } else {
+                    throw NSError(domain: "ClipPocket", code: 1, userInfo: [NSLocalizedDescriptionKey: "No text content to export."])
                 }
             case .image:
                 if let imageData = item.content as? Data {
                     try imageData.write(to: url)
+                } else {
+                    throw NSError(domain: "ClipPocket", code: 2, userInfo: [NSLocalizedDescriptionKey: "No image data to export."])
                 }
             case .file:
-                if let fileURL = item.content as? URL,
-                   let path = try? String(contentsOf: fileURL) {
-                    try path.write(to: url, atomically: true, encoding: .utf8)
+                if let fileURL = item.content as? URL {
+                    if FileManager.default.fileExists(atPath: url.path) {
+                        try FileManager.default.removeItem(at: url)
+                    }
+                    try FileManager.default.copyItem(at: fileURL, to: url)
+                } else if let path = item.content as? String {
+                    let sourceURL = URL(fileURLWithPath: path)
+                    if FileManager.default.fileExists(atPath: url.path) {
+                        try FileManager.default.removeItem(at: url)
+                    }
+                    try FileManager.default.copyItem(at: sourceURL, to: url)
+                } else {
+                    throw NSError(domain: "ClipPocket", code: 3, userInfo: [NSLocalizedDescriptionKey: "Unable to resolve file to export."])
                 }
             }
 

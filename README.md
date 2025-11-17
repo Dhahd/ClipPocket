@@ -36,7 +36,7 @@ ClipPocket is a powerful yet simple clipboard manager that keeps track of everyt
 2. **Copy as usual** - Everything you copy is automatically saved
 3. **Search & Filter** - Find items by type or search text
 4. **Pin Items** - Right-click any item to pin it
-5. **Quick Actions** - Double-click to copy an item back to clipboard
+5. **Quick Actions** - click to copy an item back to clipboard
 
 ## Support
 

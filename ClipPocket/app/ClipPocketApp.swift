@@ -21,6 +21,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     private var saveTimer: Timer?
     let excludedAppsManager = ExcludedAppsManager.shared
     @Published var isIncognitoMode: Bool = false
+    @Published var showOnboarding = false
+    private var onboardingWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -37,6 +39,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         // Set up a global event monitor for mouse clicks outside the window
         NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { event in
             self.handleMouseClickOutsideWindow(event)
+        }
+
+        // Show onboarding for first-time users
+        checkAndShowOnboarding()
+
+        // Check for updates on launch (silently, once per day)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            UpdateChecker.shared.checkForUpdatesOnLaunch()
         }
     }
     
@@ -721,5 +731,46 @@ extension AppDelegate: StatusItemViewDelegate {
         statusItem?.menu = menu
         statusItem?.button?.performClick(nil)
         statusItem?.menu = nil
+    }
+
+    // MARK: - Onboarding
+    private func checkAndShowOnboarding() {
+        let hasCompletedOnboarding = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+
+        if !hasCompletedOnboarding {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                self.showOnboardingWindow()
+            }
+        }
+    }
+
+    @objc func showOnboardingWindow() {
+        if onboardingWindow == nil {
+            let onboardingView = OnboardingView(isPresented: Binding(
+                get: { self.showOnboarding },
+                set: { newValue in
+                    self.showOnboarding = newValue
+                    if !newValue {
+                        self.onboardingWindow?.close()
+                        self.onboardingWindow = nil
+                    }
+                }
+            ))
+            .environmentObject(self)
+
+            let hostingController = NSHostingController(rootView: onboardingView)
+            let window = NSWindow(contentViewController: hostingController)
+            window.title = "Welcome to ClipPocket"
+            window.styleMask = [.titled, .closable]
+            window.center()
+            window.isReleasedWhenClosed = false
+            window.level = .floating
+
+            onboardingWindow = window
+        }
+
+        onboardingWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        showOnboarding = true
     }
 }

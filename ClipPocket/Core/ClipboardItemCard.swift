@@ -65,7 +65,11 @@ struct ClipboardItemCard: View {
         .frame(width: 240, height: 180)
         .background(
             ZStack {
-                VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
+                if let cardColor = colorFromItem() {
+                    cardColor
+                } else {
+                    VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
+                }
 
                 // Gradient overlay for depth
                 LinearGradient(
@@ -122,10 +126,20 @@ struct ClipboardItemCard: View {
             }
         )
         .onAppear {
-            if let sourceIcon = item.sourceIcon {
+            if item.type == .color, let cardColor = colorFromItem() {
+                headerColor = cardColor
+            } else if let sourceIcon = item.sourceIcon {
                 headerColor = Color(vibrantColorFrom: sourceIcon)
             }
         }
+    }
+    
+    private func colorFromItem() -> Color? {
+        guard item.type == .color, let colorString = item.content as? String else { return nil }
+        if let nsColor = NSColor(hex: colorString) {
+            return Color(nsColor: nsColor)
+        }
+        return nil
     }
 
     // Calculate gooey tilt angle based on mouse position
@@ -234,7 +248,7 @@ struct ClipboardItemCard: View {
             }
         case .color:
             if let colorString = item.content as? String {
-                let color = Color(colorString)
+                let color = colorFromItem() ?? Color.gray
                 ZStack {
                     color
                     Text(colorString)
@@ -497,4 +511,3 @@ class MouseTrackingNSView: NSView {
         onMouseMoved?(location)
     }
 }
-

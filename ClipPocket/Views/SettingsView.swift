@@ -216,22 +216,44 @@ struct SettingsView: View {
                             .foregroundColor(.secondary)
                             .textCase(.uppercase)
 
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("ClipPocket")
-                                .font(.system(size: 16, weight: .semibold))
-                            Text("Version 1.0.0")
-                                .font(.system(size: 12))
-                                .foregroundColor(.secondary)
-                            Text("Created by Shaneen Dhahd")
-                                .font(.system(size: 12))
-                                .foregroundColor(.secondary)
-                            Link("shaneendhahd@gmail.com", destination: URL(string: "mailto:shaneendhahd@gmail.com")!)
-                                .font(.system(size: 12))
+                        VStack(alignment: .leading, spacing: 12) {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("ClipPocket")
+                                    .font(.system(size: 16, weight: .semibold))
+                                Text("Version \(AppVersion.current)")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                                Text("Created by Shaneen Dhahd")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                                Link("shaneendhahd@gmail.com", destination: URL(string: "mailto:shaneendhahd@gmail.com")!)
+                                    .font(.system(size: 12))
+                            }
+                            .padding(16)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                            .cornerRadius(8)
+
+                            // Check for Updates button
+                            Button(action: {
+                                UpdateChecker.shared.checkForUpdates(showAlert: true)
+                            }) {
+                                HStack {
+                                    Image(systemName: "arrow.down.circle")
+                                    Text("Check for Updates")
+                                    Spacer()
+                                    if UpdateChecker.shared.isCheckingForUpdates {
+                                        ProgressView()
+                                            .scaleEffect(0.7)
+                                            .frame(width: 16, height: 16)
+                                    }
+                                }
+                                .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.large)
+                            .disabled(UpdateChecker.shared.isCheckingForUpdates)
                         }
-                        .padding(16)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
-                        .cornerRadius(8)
                     }
                 }
                 .padding(24)

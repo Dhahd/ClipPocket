@@ -19,6 +19,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     let settingsManager = SettingsManager.shared
     var statusItemView: StatusItemView?
     private var saveTimer: Timer?
+    let excludedAppsManager = ExcludedAppsManager.shared
+    @Published var isIncognitoMode: Bool = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -157,12 +159,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
         window.setFrame(offscreenFrame, display: false)
         window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
 
         // Animate moving up into view
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.2 // Adjust for animation speed
             context.timingFunction = CAMediaTimingFunction(name: .easeOut)
             window.animator().setFrame(adjustedFrame, display: true)
+        } completionHandler: {
+            // Ensure the window can accept keyboard input after animation
+            window.makeKey()
         }
 
         isClipboardManagerVisible = true
@@ -210,13 +216,26 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     }
     
     func checkClipboard() {
+        // Skip monitoring in incognito mode
+        guard !isIncognitoMode else {
+            lastChangeCount = NSPasteboard.general.changeCount
+            return
+        }
+
         let pasteboard = NSPasteboard.general
         guard pasteboard.changeCount != lastChangeCount && !isInternalCopy else { return }
-        
+
         lastChangeCount = pasteboard.changeCount
-        
+
         let sourceApp = NSWorkspace.shared.frontmostApplication
-        
+
+        // Check if the source app is excluded
+        if let bundleId = sourceApp?.bundleIdentifier,
+           excludedAppsManager.isAppExcluded(bundleId) {
+            print("⛔ Skipping clipboard from excluded app: \(bundleId)")
+            return
+        }
+
         if let item = readClipboardItem(from: pasteboard, sourceApp: sourceApp) {
             addClipboardItem(item)
             animateStatusItemIcon()

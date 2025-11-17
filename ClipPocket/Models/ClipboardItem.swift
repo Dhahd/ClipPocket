@@ -34,6 +34,20 @@ struct ClipboardItem: Identifiable, Codable {
         case phone = "phone"
         case json = "curlybraces"
         case file = "doc.fill"
+
+        var typeDisplayName: String {
+            switch self {
+            case .text: return "Text"
+            case .image: return "Image"
+            case .color: return "Color"
+            case .code: return "Code"
+            case .url: return "URL"
+            case .email: return "Email"
+            case .phone: return "Phone"
+            case .json: return "JSON"
+            case .file: return "File"
+            }
+        }
     }
     
     var displayString: String {

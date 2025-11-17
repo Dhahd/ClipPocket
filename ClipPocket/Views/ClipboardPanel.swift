@@ -6,10 +6,10 @@ class ClipboardPanel: NSPanel {
     
     init(contentRect: NSRect, backing: NSWindow.BackingStoreType, defer: Bool) {
             super.init(contentRect: contentRect,
-                       styleMask: [.borderless, .nonactivatingPanel],
+                       styleMask: [.borderless],
                        backing: backing,
                        defer: `defer`)
-        
+
         self.isFloatingPanel = true
         self.level = .floating
         self.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
@@ -20,9 +20,10 @@ class ClipboardPanel: NSPanel {
         self.hidesOnDeactivate = false
         self.alphaValue = 1.0
         self.isReleasedWhenClosed = false
-        
-        // Enable clicking through the window
+
+        // Allow keyboard input
         self.ignoresMouseEvents = false
+        self.acceptsMouseMovedEvents = true
     }
     
     override func mouseDown(with event: NSEvent) {

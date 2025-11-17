@@ -20,6 +20,7 @@ struct ClipboardManagerContent: View {
     @State private var selectedSection: ClipboardSection = .recent
     @State private var selectedIndex: Int = 0
     @FocusState private var searchFieldFocused: Bool
+    @State private var isSearchFieldFocused: Bool = false
     @State private var filterType: ClipboardItem.ItemType?
 
     enum ClipboardSection: String, CaseIterable {
@@ -115,8 +116,31 @@ struct ClipboardManagerContent: View {
             VStack(spacing: 0) {
                 // Header with search and controls
                 HStack {
-                    SearchBar(text: $searchText, isFocused: $searchFieldFocused)
-                        .frame(minWidth: 300)
+                    VStack(alignment: .leading, spacing: 8) {
+                        SearchBar(text: $searchText, isFocused: $searchFieldFocused)
+                            .frame(minWidth: 300)
+
+                        // Type filter
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                TypeFilterButton(
+                                    title: "All",
+                                    icon: "square.grid.2x2",
+                                    isSelected: filterType == nil,
+                                    action: { filterType = nil }
+                                )
+
+                                ForEach([ClipboardItem.ItemType.text, .code, .url, .email, .image, .file, .color, .json], id: \.self) { type in
+                                    TypeFilterButton(
+                                        title: type.typeDisplayName,
+                                        icon: type.rawValue,
+                                        isSelected: filterType == type,
+                                        action: { filterType = type }
+                                    )
+                                }
+                            }
+                        }
+                    }
 
                     Spacer()
                     
@@ -204,6 +228,62 @@ struct ClipboardManagerContent: View {
                                                 pinnedManager.unpinItem(pinnedItem)
                                             }
 
+                                            // Text transformations for text items
+                                            if case .text = pinnedItem.originalItem.type, let text = pinnedItem.originalItem.content as? String {
+                                                Divider()
+
+                                                Menu("Transform Text") {
+                                                    ForEach(TextTransformation.allCases, id: \.self) { transformation in
+                                                        Button(action: {
+                                                            let transformed = transformation.apply(to: text)
+                                                            let newItem = ClipboardItem(
+                                                                content: transformed,
+                                                                type: .text,
+                                                                timestamp: Date(),
+                                                                sourceApplication: pinnedItem.originalItem.sourceApplication
+                                                            )
+                                                            appDelegate.clipboardItems.insert(newItem, at: 0)
+                                                            appDelegate.copyItemToClipboard(newItem)
+                                                        }) {
+                                                            Label(transformation.rawValue, systemImage: transformation.icon)
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            // Quick Actions
+                                            Divider()
+
+                                            Menu("Quick Actions") {
+                                                Button(action: {
+                                                    QuickActions.shared.exportToFile(pinnedItem.originalItem)
+                                                }) {
+                                                    Label("Save to File", systemImage: "square.and.arrow.down")
+                                                }
+
+                                                if case .text = pinnedItem.originalItem.type, let text = pinnedItem.originalItem.content as? String {
+                                                    Button(action: {
+                                                        QuickActions.shared.showQRCode(for: pinnedItem.originalItem)
+                                                    }) {
+                                                        Label("Generate QR Code", systemImage: "qrcode")
+                                                    }
+
+                                                    Divider()
+
+                                                    Button(action: {
+                                                        QuickActions.shared.copyAsJSON(text)
+                                                    }) {
+                                                        Label("Copy as JSON", systemImage: "curlybraces")
+                                                    }
+
+                                                    Button(action: {
+                                                        QuickActions.shared.copyAsBase64(text)
+                                                    }) {
+                                                        Label("Copy as Base64", systemImage: "lock.shield")
+                                                    }
+                                                }
+                                            }
+
                                             Divider()
 
                                             Button("Delete", role: .destructive) {
@@ -242,6 +322,62 @@ struct ClipboardManagerContent: View {
                                             } else {
                                                 Button("Unpin Item") {
                                                     pinnedManager.unpinItem(withOriginalId: item.id)
+                                                }
+                                            }
+
+                                            // Text transformations for text items
+                                            if case .text = item.type, let text = item.content as? String {
+                                                Divider()
+
+                                                Menu("Transform Text") {
+                                                    ForEach(TextTransformation.allCases, id: \.self) { transformation in
+                                                        Button(action: {
+                                                            let transformed = transformation.apply(to: text)
+                                                            let newItem = ClipboardItem(
+                                                                content: transformed,
+                                                                type: .text,
+                                                                timestamp: Date(),
+                                                                sourceApplication: item.sourceApplication
+                                                            )
+                                                            appDelegate.clipboardItems.insert(newItem, at: 0)
+                                                            appDelegate.copyItemToClipboard(newItem)
+                                                        }) {
+                                                            Label(transformation.rawValue, systemImage: transformation.icon)
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            // Quick Actions
+                                            Divider()
+
+                                            Menu("Quick Actions") {
+                                                Button(action: {
+                                                    QuickActions.shared.exportToFile(item)
+                                                }) {
+                                                    Label("Save to File", systemImage: "square.and.arrow.down")
+                                                }
+
+                                                if case .text = item.type, let text = item.content as? String {
+                                                    Button(action: {
+                                                        QuickActions.shared.showQRCode(for: item)
+                                                    }) {
+                                                        Label("Generate QR Code", systemImage: "qrcode")
+                                                    }
+
+                                                    Divider()
+
+                                                    Button(action: {
+                                                        QuickActions.shared.copyAsJSON(text)
+                                                    }) {
+                                                        Label("Copy as JSON", systemImage: "curlybraces")
+                                                    }
+
+                                                    Button(action: {
+                                                        QuickActions.shared.copyAsBase64(text)
+                                                    }) {
+                                                        Label("Copy as Base64", systemImage: "lock.shield")
+                                                    }
                                                 }
                                             }
 
@@ -285,6 +421,62 @@ struct ClipboardManagerContent: View {
                                                 }
                                             }
 
+                                            // Text transformations for text items
+                                            if case .text = item.type, let text = item.content as? String {
+                                                Divider()
+
+                                                Menu("Transform Text") {
+                                                    ForEach(TextTransformation.allCases, id: \.self) { transformation in
+                                                        Button(action: {
+                                                            let transformed = transformation.apply(to: text)
+                                                            let newItem = ClipboardItem(
+                                                                content: transformed,
+                                                                type: .text,
+                                                                timestamp: Date(),
+                                                                sourceApplication: item.sourceApplication
+                                                            )
+                                                            appDelegate.clipboardItems.insert(newItem, at: 0)
+                                                            appDelegate.copyItemToClipboard(newItem)
+                                                        }) {
+                                                            Label(transformation.rawValue, systemImage: transformation.icon)
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            // Quick Actions
+                                            Divider()
+
+                                            Menu("Quick Actions") {
+                                                Button(action: {
+                                                    QuickActions.shared.exportToFile(item)
+                                                }) {
+                                                    Label("Save to File", systemImage: "square.and.arrow.down")
+                                                }
+
+                                                if case .text = item.type, let text = item.content as? String {
+                                                    Button(action: {
+                                                        QuickActions.shared.showQRCode(for: item)
+                                                    }) {
+                                                        Label("Generate QR Code", systemImage: "qrcode")
+                                                    }
+
+                                                    Divider()
+
+                                                    Button(action: {
+                                                        QuickActions.shared.copyAsJSON(text)
+                                                    }) {
+                                                        Label("Copy as JSON", systemImage: "curlybraces")
+                                                    }
+
+                                                    Button(action: {
+                                                        QuickActions.shared.copyAsBase64(text)
+                                                    }) {
+                                                        Label("Copy as Base64", systemImage: "lock.shield")
+                                                    }
+                                                }
+                                            }
+
                                             Divider()
 
                                             Button("Delete", role: .destructive) {
@@ -319,54 +511,19 @@ struct ClipboardManagerContent: View {
             )
             .onAppear {
                 searchFieldFocused = true
+                isSearchFieldFocused = true
+            }
+            .onChange(of: searchFieldFocused) { newValue in
+                isSearchFieldFocused = newValue
             }
         }
-        .background(KeyboardEventHandler(
+        .background(LocalEventMonitorView(
+            searchFieldFocused: $isSearchFieldFocused,
             onEscape: {
                 NSApp.sendAction(#selector(AppDelegate.hideClipboardManager), to: nil, from: nil)
             },
             onEnter: {
                 copySelectedItem()
-            },
-            onArrowLeft: {
-                selectedIndex = max(0, selectedIndex - 1)
-            },
-            onArrowRight: {
-                let maxIndex: Int = {
-                    switch selectedSection {
-                    case .pinned: return filteredPinnedItems.count - 1
-                    case .recent: return filteredRecentItems.count - 1
-                    case .history: return filteredHistoryItems.count - 1
-                    }
-                }()
-                selectedIndex = min(maxIndex, selectedIndex + 1)
-            },
-            onArrowUp: {
-                selectedIndex = max(0, selectedIndex - 4) // Move up one row (4 items per row)
-            },
-            onArrowDown: {
-                let maxIndex: Int = {
-                    switch selectedSection {
-                    case .pinned: return filteredPinnedItems.count - 1
-                    case .recent: return filteredRecentItems.count - 1
-                    case .history: return filteredHistoryItems.count - 1
-                    }
-                }()
-                selectedIndex = min(maxIndex, selectedIndex + 4)
-            },
-            onCmdF: {
-                searchFieldFocused = true
-            },
-            onTab: {
-                switch selectedSection {
-                case .pinned:
-                    selectedSection = .recent
-                case .recent:
-                    selectedSection = .history
-                case .history:
-                    selectedSection = .pinned
-                }
-                selectedIndex = 0
             },
             onDelete: {
                 deleteSelectedItem()
@@ -419,83 +576,100 @@ struct ClipboardManagerContent: View {
     }
 }
 
-struct KeyboardEventHandler: NSViewRepresentable {
+struct LocalEventMonitorView: NSViewRepresentable {
+    @Binding var searchFieldFocused: Bool
     let onEscape: () -> Void
     let onEnter: () -> Void
-    let onArrowLeft: () -> Void
-    let onArrowRight: () -> Void
-    let onArrowUp: () -> Void
-    let onArrowDown: () -> Void
-    let onCmdF: () -> Void
-    let onTab: () -> Void
     let onDelete: () -> Void
 
     func makeNSView(context: Context) -> NSView {
-        let view = KeyEventView()
-        view.onEscape = onEscape
-        view.onEnter = onEnter
-        view.onArrowLeft = onArrowLeft
-        view.onArrowRight = onArrowRight
-        view.onArrowUp = onArrowUp
-        view.onArrowDown = onArrowDown
-        view.onCmdF = onCmdF
-        view.onTab = onTab
-        view.onDelete = onDelete
+        let view = NSView()
 
-        // Make this view the first responder to receive key events
-        DispatchQueue.main.async {
-            view.window?.makeFirstResponder(view)
+        // Use local event monitor to intercept keyboard events
+        let monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            // Always allow Escape to close the window
+            if event.keyCode == 53 { // Escape
+                DispatchQueue.main.async {
+                    self.onEscape()
+                }
+                return nil // Event handled
+            }
+
+            // For other keys, check if search field is focused
+            // If search field is focused, let the event pass through
+            if self.searchFieldFocused {
+                return event // Let the search field handle it
+            }
+
+            // Handle navigation keys when search field is not focused
+            switch event.keyCode {
+            case 36: // Return/Enter
+                DispatchQueue.main.async {
+                    self.onEnter()
+                }
+                return nil
+            case 51: // Delete
+                DispatchQueue.main.async {
+                    self.onDelete()
+                }
+                return nil
+            default:
+                return event
+            }
         }
 
+        context.coordinator.monitor = monitor
         return view
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {
-        // Ensure first responder status is maintained
-        if let keyView = nsView as? KeyEventView {
-            DispatchQueue.main.async {
-                keyView.window?.makeFirstResponder(keyView)
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    class Coordinator {
+        var monitor: Any?
+
+        deinit {
+            if let monitor = monitor {
+                NSEvent.removeMonitor(monitor)
             }
         }
     }
 }
 
-class KeyEventView: NSView {
-    var onEscape: (() -> Void)?
-    var onEnter: (() -> Void)?
-    var onArrowLeft: (() -> Void)?
-    var onArrowRight: (() -> Void)?
-    var onArrowUp: (() -> Void)?
-    var onArrowDown: (() -> Void)?
-    var onCmdF: (() -> Void)?
-    var onTab: (() -> Void)?
-    var onDelete: (() -> Void)?
+struct TypeFilterButton: View {
+    let title: String
+    let icon: String
+    let isSelected: Bool
+    let action: () -> Void
 
-    override var acceptsFirstResponder: Bool { true }
-
-    override func keyDown(with event: NSEvent) {
-        switch event.keyCode {
-        case 53: // Escape
-            onEscape?()
-        case 36: // Enter/Return
-            onEnter?()
-        case 123: // Left arrow
-            onArrowLeft?()
-        case 124: // Right arrow
-            onArrowRight?()
-        case 126: // Up arrow
-            onArrowUp?()
-        case 125: // Down arrow
-            onArrowDown?()
-        case 48: // Tab
-            onTab?()
-        case 51: // Delete
-            onDelete?()
-        case 3 where event.modifierFlags.contains(.command): // Cmd+F
-            onCmdF?()
-        default:
-            super.keyDown(with: event)
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 10))
+                Text(title)
+                    .font(.system(size: 11, weight: .medium))
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(isSelected ? Color.white.opacity(0.2) : Color.white.opacity(0.05))
+            )
+            .foregroundColor(isSelected ? .white : .white.opacity(0.6))
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .strokeBorder(
+                        Color.white.opacity(isSelected ? 0.3 : 0),
+                        lineWidth: 1
+                    )
+            )
         }
+        .buttonStyle(PlainButtonStyle())
+        .animation(.easeOut(duration: 0.15), value: isSelected)
     }
 }
 

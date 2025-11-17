@@ -8,42 +8,29 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     var statusItem: NSStatusItem?
     @Published var clipboardItems: [ClipboardItem] = []
     @Published var isShowingSettings = true
+    @Published var pinnedManager = PinnedClipboardManager()
     var timer: Timer?
     private var lastChangeCount: Int = 0
     private var isInternalCopy = false
     private var settingsWindow: NSWindow?
     private var clipboardWindowController: ClipboardWindowController?
     private var isClipboardManagerVisible = false
-    var eventHandler: EventHandlerRef?
+    var hotKeyRef: EventHotKeyRef?
     private let settingsManager = SettingsManager.shared
     var statusItemView: StatusItemView?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
-        
+
         setLaunchAtLogin(settingsManager.launchAtLogin)
-        
-        setupGlobalHotkey()
+
+        loadPersistedClipboardHistory()
         startMonitoringClipboard()
         checkAccessibilityPermission()
-        
+
         setupStatusItem()
         setupClipboardManager()
-        
-        NSApp.setActivationPolicy(.accessory)
-        
-        let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        if let button = statusItem.button {
-            button.title = "☰" // You can set an icon or text
-        }
-        
-        DispatchQueue.main.async {
-            NSApp.activate(ignoringOtherApps: true)
-        }
-        
-        let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "Quit", action: #selector(quitApp), keyEquivalent: "q"))
-        statusItem.menu = menu
+
         // Set up a global event monitor for mouse clicks outside the window
         NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { event in
             self.handleMouseClickOutsideWindow(event)
@@ -51,7 +38,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     }
     
     private func setLaunchAtLogin(_ enabled: Bool) {
-        let launcherAppId = "dhahdz.shaneen.ClipPocket"
         if enabled {
             try? SMAppService.mainApp.register()
         } else {
@@ -60,29 +46,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     }
     
     @objc func quitApp() {
+        saveClipboardHistory()
         NSApp.terminate(nil)
     }
 
     func checkAccessibilityPermission() {
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: false]
         let accessibilityEnabled = AXIsProcessTrustedWithOptions(options as CFDictionary)
-        
-        if accessibilityEnabled {
-            print("Accessibility permission already granted")
-            setupGlobalHotkey()
-        } else {
-            DispatchQueue.main.async {
-                let alert = NSAlert()
-                alert.messageText = "Accessibility Permission Required"
-                alert.informativeText = "ClipPocket needs Accessibility permission to monitor keyboard events for the global shortcut. Would you like to open System Preferences to grant permission?"
-                alert.addButton(withTitle: "Open System Preferences")
-                alert.addButton(withTitle: "Later")
-                
-                let response = alert.runModal()
-                if response == .alertFirstButtonReturn {
-                    self.openAccessibilityPreferences()
-                }
-            }
+
+        print("🔍 Checking accessibility permission: \(accessibilityEnabled)")
+
+        // Always try to setup hotkey - it will fail gracefully if no permission
+        setupGlobalHotkey()
+
+        if !accessibilityEnabled {
+            print("⚠️ Accessibility permission not granted - hotkey may not work")
             startAccessibilityPermissionCheck()
         }
     }
@@ -107,23 +85,28 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     
     func setupClipboardManager() {
         let screenRect = NSScreen.main?.visibleFrame ?? .zero
-        let windowWidth: CGFloat = screenRect.width - 10  // Subtracting 100 to give some padding
-        
+        let windowWidth: CGFloat = screenRect.width - 10  // Wide screen with small padding
+        let windowHeight: CGFloat = 300
+
         let xPosition = (screenRect.width - windowWidth) / 2
-        let yPosition = screenRect.minY + 10  // 10 pixels from the bottom
-        
-        let windowFrame = NSRect(x: xPosition, y: yPosition, width: windowWidth, height: 300)
-        
+        let yPosition = screenRect.minY + 10  // 10px from bottom
+
+        let windowFrame = NSRect(x: xPosition, y: yPosition, width: windowWidth, height: windowHeight)
+
         clipboardWindowController = ClipboardWindowController(contentRect: windowFrame)
-    
+
         clipboardWindowController?.window?.contentView?.layer?.cornerRadius = 15
-        
+
         if let window = clipboardWindowController?.window {
-            let hostingView = NSHostingView(rootView: ClipboardManagerView().environmentObject(self))
+            let hostingView = NSHostingView(rootView:
+                ClipboardManagerView()
+                    .environmentObject(self)
+                    .environmentObject(pinnedManager)
+            )
             hostingView.layer?.cornerRadius = 15
             window.contentView = hostingView
         }
-        
+
         print("Clipboard window controller initialized: \(clipboardWindowController != nil)")
     }
     
@@ -138,12 +121,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
     private var storedWindowFrame: NSRect {
         let screenRect = NSScreen.main?.visibleFrame ?? .zero
-        let windowWidth: CGFloat = screenRect.width - 10  // Subtracting 10 to give some padding
+        let windowWidth: CGFloat = screenRect.width - 10
         let windowHeight: CGFloat = 300
-        
+
         let xPosition = (screenRect.width - windowWidth) / 2
-        let yPosition = screenRect.minY + 10  // 10 pixels from the bottom
-        
+        let yPosition = screenRect.minY + 10  // 10px from bottom
+
         return NSRect(x: xPosition, y: yPosition, width: windowWidth, height: windowHeight)
     }
 
@@ -256,20 +239,59 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     @objc func openSettings() {
         if settingsWindow == nil {
             let settingsView = SettingsView()
+                .environmentObject(self)
             let hostingController = NSHostingController(rootView: settingsView)
             settingsWindow = NSWindow(contentViewController: hostingController)
             settingsWindow?.title = "Settings"
-            settingsWindow?.styleMask = [.titled, .closable, .miniaturizable, .resizable]
-            settingsWindow?.setContentSize(NSSize(width: 300, height: 200))
+            settingsWindow?.styleMask = [.titled, .closable, .miniaturizable]
+            settingsWindow?.setContentSize(NSSize(width: 450, height: 500))
         }
-        
+
         settingsWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
     
     func startMonitoringClipboard() {
-        timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+        // Set initial change count
+        lastChangeCount = NSPasteboard.general.changeCount
+
+        // Use longer polling interval for better performance
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             self?.checkClipboard()
+        }
+    }
+
+    // MARK: - Persistence
+
+    private func loadPersistedClipboardHistory() {
+        guard let data = UserDefaults.standard.data(forKey: "ClipboardHistory") else {
+            print("No clipboard history found")
+            return
+        }
+
+        do {
+            let decoder = JSONDecoder()
+            let loadedItems = try decoder.decode([ClipboardItem].self, from: data)
+
+            // Load only the most recent items (keep 100 in memory)
+            clipboardItems = Array(loadedItems.prefix(100))
+            print("Loaded \(clipboardItems.count) clipboard items from history")
+        } catch {
+            print("Failed to load clipboard history: \(error.localizedDescription)")
+            clipboardItems = []
+        }
+    }
+
+    func saveClipboardHistory() {
+        do {
+            let encoder = JSONEncoder()
+            // Save only the most recent 1000 items to disk
+            let itemsToSave = Array(clipboardItems.prefix(1000))
+            let data = try encoder.encode(itemsToSave)
+            UserDefaults.standard.set(data, forKey: "ClipboardHistory")
+            print("Saved \(itemsToSave.count) clipboard items to history")
+        } catch {
+            print("Failed to save clipboard history: \(error.localizedDescription)")
         }
     }
     
@@ -277,44 +299,116 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         // Check for image
         if let image = NSImage(pasteboard: pasteboard) {
             if let tiffData = image.tiffRepresentation {
+                // Compress image for storage
+                if let compressedData = compressImage(image) {
+                    return ClipboardItem(content: compressedData, type: .image, timestamp: Date(), sourceApplication: sourceApp)
+                }
                 return ClipboardItem(content: tiffData, type: .image, timestamp: Date(), sourceApplication: sourceApp)
             }
         }
-        
+
         // Check for text
         if let string = pasteboard.string(forType: .string) {
-            // Check if it's a color (simple hex check)
-            if string.matches(regex: "^#(?:[0-9a-fA-F]{3}){1,2}$") {
-                return ClipboardItem(content: string, type: .color, timestamp: Date(), sourceApplication: sourceApp)
-            }
-            
-            // Check if it's code (simple check for common programming keywords)
-            let codeKeywords = ["func", "class", "struct", "var", "let", "if", "else", "for", "while", "return"]
-            if codeKeywords.contains(where: { string.contains($0) }) {
-                return ClipboardItem(content: string, type: .code, timestamp: Date(), sourceApplication: sourceApp)
-            }
-            
-            // If it's not a color or code, treat it as plain text
-            return ClipboardItem(content: string, type: .text, timestamp: Date(), sourceApplication: sourceApp)
+            let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            // Skip empty strings
+            guard !trimmed.isEmpty else { return nil }
+
+            let detectedType = detectContentType(from: trimmed)
+            return ClipboardItem(content: string, type: detectedType, timestamp: Date(), sourceApplication: sourceApp)
         }
-        
+
         return nil
     }
+
+    private func compressImage(_ image: NSImage) -> Data? {
+        guard let tiff = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff) else { return nil }
+
+        return bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.7])
+    }
+
+    private func detectContentType(from string: String) -> ClipboardItem.ItemType {
+        let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // URL detection
+        if let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue),
+           let match = detector.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)),
+           match.range.length == trimmed.count {
+            return .url
+        }
+
+        // Email detection
+        if trimmed.range(of: #"^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$"#,
+                        options: [.regularExpression, .caseInsensitive]) != nil {
+            return .email
+        }
+
+        // Phone number detection
+        if let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.phoneNumber.rawValue),
+           detector.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)) != nil {
+            return .phone
+        }
+
+        // JSON detection
+        if (trimmed.hasPrefix("{") && trimmed.hasSuffix("}")) ||
+           (trimmed.hasPrefix("[") && trimmed.hasSuffix("]")) {
+            if let _ = try? JSONSerialization.jsonObject(with: Data(trimmed.utf8)) {
+                return .json
+            }
+        }
+
+        // Color detection - expand beyond hex
+        if trimmed.matches(regex: #"^#([0-9a-fA-F]{3}){1,2}$"#) ||
+           trimmed.matches(regex: #"^rgb\("#) ||
+           trimmed.matches(regex: #"^hsl\("#) ||
+           trimmed.matches(regex: #"^rgba\("#) ||
+           trimmed.matches(regex: #"^hsla\("#) {
+            return .color
+        }
+
+        // Code detection - use better heuristics
+        let codeIndicators = [
+            trimmed.contains("func ") || trimmed.contains("function "),
+            trimmed.contains("class ") || trimmed.contains("struct "),
+            trimmed.contains("import ") || trimmed.contains("package "),
+            trimmed.contains("const ") || trimmed.contains("let ") || trimmed.contains("var "),
+            trimmed.contains("def ") || trimmed.contains("=>"),
+            (trimmed.split(separator: "\n").count > 3 && (trimmed.contains("{") || trimmed.contains(":"))),
+            trimmed.contains("public ") || trimmed.contains("private "),
+            trimmed.matches(regex: #"^\s*(if|for|while)\s*\("#)
+        ]
+
+        let indicatorCount = codeIndicators.filter({ $0 }).count
+        if indicatorCount >= 2 {
+            return .code
+        }
+
+        return .text
+    }
     
+    private var saveCounter = 0
+
     func addClipboardItem(_ item: ClipboardItem) {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
-            
+
             if !self.clipboardItems.contains(where: { $0.isEqual(to: item) }) {
                 self.clipboardItems.insert(item, at: 0)
-                
+
                 // Trim the list if it exceeds a certain limit (e.g., 100 items)
                 let maxItems = 100
                 if self.clipboardItems.count > maxItems {
                     self.clipboardItems = Array(self.clipboardItems.prefix(maxItems))
                 }
-                
+
                 print("Added new clipboard item: \(item.displayString)")
+
+                // Auto-save every 30 items or when reaching certain milestones
+                self.saveCounter += 1
+                if self.saveCounter % 30 == 0 {
+                    self.saveClipboardHistory()
+                }
             }
         }
     }
@@ -325,7 +419,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         pasteboard.clearContents()
         
         switch item.type {
-        case .text, .code:
+        case .text, .code, .url, .email, .phone, .json:
             if let textContent = item.content as? String {
                 pasteboard.setString(textContent, forType: .string)
             }
@@ -336,7 +430,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         case .color:
             if let colorString = item.content as? String {
                 pasteboard.setString(colorString, forType: .string)
-                
+
                 // Optionally, you can also set the color as an NSColor object
                 if let color = NSColor(hex: colorString) {
                     pasteboard.setData(try? NSKeyedArchiver.archivedData(withRootObject: color, requiringSecureCoding: true), forType: .color)
@@ -354,6 +448,115 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             self.isInternalCopy = false
         }
     }
+
+    func deleteClipboardItem(_ item: ClipboardItem) {
+        clipboardItems.removeAll(where: { $0.id == item.id })
+        saveClipboardHistory()
+    }
+
+    // MARK: - Pinned Item Management
+    
+    @objc func togglePinForItem(_ sender: NSMenuItem) {
+        guard let item = sender.representedObject as? ClipboardItem else { return }
+        
+        if pinnedManager.isPinned(item) {
+            pinnedManager.unpinItem(withOriginalId: item.id)
+        } else {
+            pinnedManager.pinItem(item)
+        }
+    }
+    
+    @objc func editPinTitle(_ sender: NSMenuItem) {
+        guard let pinnedItem = sender.representedObject as? PinnedClipboardItem else { return }
+        
+        let alert = NSAlert()
+        alert.messageText = "Edit Pin Title"
+        alert.informativeText = "Enter a custom title for this pinned item:"
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+        
+        let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
+        textField.stringValue = pinnedItem.customTitle ?? pinnedItem.displayString
+        alert.accessoryView = textField
+        
+        let response = alert.runModal()
+        if response == .alertFirstButtonReturn {
+            let newTitle = textField.stringValue.isEmpty ? nil : textField.stringValue
+            pinnedManager.updateCustomTitle(for: pinnedItem, title: newTitle)
+        }
+    }
+    
+    @objc func removePinnedItem(_ sender: NSMenuItem) {
+        guard let pinnedItem = sender.representedObject as? PinnedClipboardItem else { return }
+        pinnedManager.unpinItem(pinnedItem)
+    }
+    
+    // Create context menu for regular clipboard items
+    func createContextMenu(for item: ClipboardItem) -> NSMenu {
+        let menu = NSMenu()
+        
+        // Copy item
+        let copyItem = NSMenuItem(title: "Copy", action: #selector(copyContextMenuItem(_:)), keyEquivalent: "")
+        copyItem.representedObject = item
+        copyItem.target = self
+        menu.addItem(copyItem)
+        
+        menu.addItem(NSMenuItem.separator())
+        
+        // Pin/Unpin option
+        if pinnedManager.isPinned(item) {
+            let unpinItem = NSMenuItem(title: "Unpin Item", action: #selector(togglePinForItem(_:)), keyEquivalent: "")
+            unpinItem.representedObject = item
+            unpinItem.target = self
+            menu.addItem(unpinItem)
+        } else {
+            let pinItem = NSMenuItem(title: "Pin Item", action: #selector(togglePinForItem(_:)), keyEquivalent: "")
+            pinItem.representedObject = item
+            pinItem.target = self
+            menu.addItem(pinItem)
+        }
+        
+        return menu
+    }
+    
+    // Create context menu for pinned items
+    func createPinnedContextMenu(for pinnedItem: PinnedClipboardItem) -> NSMenu {
+        let menu = NSMenu()
+        
+        // Copy item
+        let copyItem = NSMenuItem(title: "Copy", action: #selector(copyPinnedContextMenuItem(_:)), keyEquivalent: "")
+        copyItem.representedObject = pinnedItem
+        copyItem.target = self
+        menu.addItem(copyItem)
+        
+        menu.addItem(NSMenuItem.separator())
+        
+        // Edit title
+        let editTitleItem = NSMenuItem(title: "Edit Title", action: #selector(editPinTitle(_:)), keyEquivalent: "")
+        editTitleItem.representedObject = pinnedItem
+        editTitleItem.target = self
+        menu.addItem(editTitleItem)
+        
+        // Unpin
+        let unpinItem = NSMenuItem(title: "Unpin", action: #selector(removePinnedItem(_:)), keyEquivalent: "")
+        unpinItem.representedObject = pinnedItem
+        unpinItem.target = self
+        menu.addItem(unpinItem)
+        
+        return menu
+    }
+    
+    @objc func copyContextMenuItem(_ sender: NSMenuItem) {
+        guard let item = sender.representedObject as? ClipboardItem else { return }
+        copyItemToClipboard(item)
+        hideClipboardManager()
+    }
+    
+    @objc func copyPinnedContextMenuItem(_ sender: NSMenuItem) {
+        guard let pinnedItem = sender.representedObject as? PinnedClipboardItem else { return }
+        copyItemToClipboard(pinnedItem.originalItem)
+        hideClipboardManager()
+    }
 }
 
 extension AppDelegate: StatusItemViewDelegate {
@@ -364,10 +567,17 @@ extension AppDelegate: StatusItemViewDelegate {
     
     func statusItemRightClicked() {
         let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "Settings", action: #selector(openSettings), keyEquivalent: ","))
+
+        let settingsItem = NSMenuItem(title: "Settings", action: #selector(openSettings), keyEquivalent: ",")
+        settingsItem.target = self
+        menu.addItem(settingsItem)
+
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Quit", action: #selector(quitApp), keyEquivalent: "q"))
-        
+
+        let quitItem = NSMenuItem(title: "Quit", action: #selector(quitApp), keyEquivalent: "q")
+        quitItem.target = self
+        menu.addItem(quitItem)
+
         statusItem?.menu = menu
         statusItem?.button?.performClick(nil)
         statusItem?.menu = nil

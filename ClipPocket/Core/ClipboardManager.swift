@@ -16,7 +16,7 @@ class ClipboardManager: ObservableObject {
         pasteboard.clearContents()
         
         switch item.type {
-        case .text, .code, .color:
+        case .text, .code, .color, .url, .email, .phone, .json:
             if let content = item.content as? String {
                 pasteboard.setString(content, forType: .string)
             }

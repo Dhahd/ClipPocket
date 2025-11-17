@@ -10,7 +10,7 @@
 // Extension to create Color from NSImage
 
 import CoreImage
-import SwiftUICore
+import SwiftUI
 import AppKit
 
 

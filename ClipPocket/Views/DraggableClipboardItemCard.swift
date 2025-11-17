@@ -5,7 +5,6 @@
 //  Created by Shaneen on 10/14/24.
 //
 
-import SwiftUICore
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
@@ -23,7 +22,7 @@ struct DraggableClipboardItemCard: View {
                 self.dragDropManager.draggedItem = self.item
                 let provider = NSItemProvider()
                 switch item.type {
-                case .text, .code, .color:
+                case .text, .code, .color, .url, .email, .phone, .json:
                     if let stringContent = item.content as? String {
                         provider.registerObject(stringContent as NSString, visibility: .all)
                     }
@@ -33,7 +32,7 @@ struct DraggableClipboardItemCard: View {
                         provider.registerObject(image, visibility: .all)
                     }
                 }
-                
+
                 return provider
             } preview: {
                 ClipboardItemCard(item: item)

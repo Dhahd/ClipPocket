@@ -1,3 +1,11 @@
+//
+//  PinnedClipboardItem.swift
+//  ClipPocket
+//
+//  Created by Shaneen on 22/5/25.
+//
+
+
 import Foundation
 
 class PinnedClipboardItem: ObservableObject, Identifiable, Codable {
@@ -43,7 +51,7 @@ class PinnedClipboardItem: ObservableObject, Identifiable, Codable {
         return originalItem.displayString
     }
     
-    var contentType: ClipboardItem.ContentType {
-        return originalItem.contentType
+    var contentType: ClipboardItem.ItemType {
+        return originalItem.type
     }
 }

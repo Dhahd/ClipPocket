@@ -25,15 +25,19 @@ struct ClipboardItem: Identifiable, Codable {
     }
     
     enum ItemType: String, Codable {
-        case text = "Text"
-        case image = "Image"
-        case color = "Color"
-        case code = "Code"
+        case text = "doc.text"
+        case image = "photo"
+        case color = "paintpalette"
+        case code = "chevron.left.forwardslash.chevron.right"
+        case url = "link"
+        case email = "envelope"
+        case phone = "phone"
+        case json = "curlybraces"
     }
     
     var displayString: String {
         switch type {
-        case .text, .code:
+        case .text, .code, .url, .email, .phone, .json:
             return String((content as? String)?.prefix(100) ?? "Invalid Text")
         case .image:
             return "Image"
@@ -41,19 +45,27 @@ struct ClipboardItem: Identifiable, Codable {
             return content as? String ?? "Invalid Color"
         }
     }
+
+    var typeDisplayName: String {
+        switch type {
+        case .text: return "Text"
+        case .image: return "Image"
+        case .color: return "Color"
+        case .code: return "Code"
+        case .url: return "URL"
+        case .email: return "Email"
+        case .phone: return "Phone"
+        case .json: return "JSON"
+        }
+    }
     
     var icon: String {
-        switch type {
-        case .text: return "doc.text"
-        case .image: return "photo"
-        case .color: return "paintpalette"
-        case .code: return "chevron.left.forwardslash.chevron.right"
-        }
+        return type.rawValue
     }
     
     func isEqual(to other: ClipboardItem) -> Bool {
         switch (self.type, other.type) {
-        case (.text, .text), (.code, .code), (.color, .color):
+        case (.text, .text), (.code, .code), (.color, .color), (.url, .url), (.email, .email), (.phone, .phone), (.json, .json):
             return (self.content as? String) == (other.content as? String)
         case (.image, .image):
             if let selfData = self.content as? Data,
@@ -78,10 +90,12 @@ struct ClipboardItem: Identifiable, Codable {
         
         // Encode content based on type
         switch type {
-        case .text, .code, .color:
+        case .text, .code, .color, .url, .email, .phone, .json:
             try container.encode(content as? String, forKey: .content)
         case .image:
-            if let imageData = (content as? NSImage)?.tiffRepresentation {
+            if let imageData = content as? Data {
+                try container.encode(imageData, forKey: .content)
+            } else if let imageData = (content as? NSImage)?.tiffRepresentation {
                 try container.encode(imageData, forKey: .content)
             }
         }
@@ -103,11 +117,11 @@ struct ClipboardItem: Identifiable, Codable {
         
         // Decode content based on type
         switch type {
-        case .text, .code, .color:
+        case .text, .code, .color, .url, .email, .phone, .json:
             content = try container.decode(String.self, forKey: .content)
         case .image:
             if let imageData = try container.decodeIfPresent(Data.self, forKey: .content) {
-                content = NSImage(data: imageData) ?? Data()
+                content = imageData
             } else {
                 content = Data()
             }

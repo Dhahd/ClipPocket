@@ -242,7 +242,84 @@ struct ClipboardItemCard: View {
                         .foregroundColor(color.contrastingTextColor(colorString))
                 }
             }
+        case .file:
+            VStack(alignment: .leading, spacing: 10) {
+                // File icon
+                if let url = item.content as? URL {
+                    let fileExtension = url.pathExtension.lowercased()
+                    let iconName = getFileIconName(for: fileExtension)
+
+                    Image(systemName: iconName)
+                        .font(.system(size: 40))
+                        .foregroundColor(getFileIconColor(for: fileExtension))
+                } else {
+                    Image(systemName: "doc.fill")
+                        .font(.system(size: 40))
+                        .foregroundColor(.orange)
+                }
+
+                // File name
+                Text(item.displayString)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.white)
+                    .lineLimit(2)
+
+                // File path
+                if let url = item.content as? URL {
+                    Text(url.path)
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.6))
+                        .lineLimit(2)
+
+                    // File info
+                    if let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+                       let fileSize = attributes[.size] as? Int64 {
+                        Text(formatFileSize(fileSize))
+                            .font(.system(size: 10))
+                            .foregroundColor(.white.opacity(0.5))
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .padding(12)
         }
+    }
+
+    private func getFileIconName(for extension: String) -> String {
+        switch `extension` {
+        case "pdf": return "doc.text.fill"
+        case "doc", "docx": return "doc.richtext.fill"
+        case "xls", "xlsx": return "tablecells.fill"
+        case "ppt", "pptx": return "rectangle.stack.fill"
+        case "zip", "rar", "7z": return "archivebox.fill"
+        case "jpg", "jpeg", "png", "gif", "bmp": return "photo.fill"
+        case "mp4", "mov", "avi": return "video.fill"
+        case "mp3", "wav", "m4a": return "music.note"
+        case "swift", "js", "py", "java", "cpp": return "chevron.left.forwardslash.chevron.right"
+        default: return "doc.fill"
+        }
+    }
+
+    private func getFileIconColor(for extension: String) -> Color {
+        switch `extension` {
+        case "pdf": return .red
+        case "doc", "docx": return .blue
+        case "xls", "xlsx": return .green
+        case "ppt", "pptx": return .orange
+        case "zip", "rar", "7z": return .purple
+        case "jpg", "jpeg", "png", "gif", "bmp": return .cyan
+        case "mp4", "mov", "avi": return .pink
+        case "mp3", "wav", "m4a": return .purple
+        case "swift", "js", "py", "java", "cpp": return .mint
+        default: return .gray
+        }
+    }
+
+    private func formatFileSize(_ bytes: Int64) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useBytes, .useKB, .useMB, .useGB]
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: bytes)
     }
 }
 
@@ -278,6 +355,13 @@ class ClipboardItemWrapper: NSObject, NSItemProviderWriting, NSItemProviderReadi
             if typeIdentifier == UTType.image.identifier,
                let imageData = item.content as? Data {
                 completionHandler(imageData, nil)
+            } else {
+                completionHandler(nil, NSError(domain: "ClipboardItemError", code: -1, userInfo: nil))
+            }
+        case .file:
+            if let url = item.content as? URL,
+               let data = url.absoluteString.data(using: .utf8) {
+                completionHandler(data, nil)
             } else {
                 completionHandler(nil, NSError(domain: "ClipboardItemError", code: -1, userInfo: nil))
             }

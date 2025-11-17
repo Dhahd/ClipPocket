@@ -2,7 +2,7 @@ import SwiftUI
 import ServiceManagement
 
 struct SettingsView: View {
-    @StateObject private var settingsManager = SettingsManager.shared
+    @ObservedObject private var settingsManager = SettingsManager.shared
     @EnvironmentObject var appDelegate: AppDelegate
     @State private var showClearHistoryAlert = false
 
@@ -43,6 +43,38 @@ struct SettingsView: View {
                             }
                         }
                         .toggleStyle(.switch)
+
+                        Toggle(isOn: Binding(
+                            get: { settingsManager.rememberHistory },
+                            set: { newValue in
+                                settingsManager.rememberHistory = newValue
+                                if newValue {
+                                    appDelegate.loadPersistedClipboardHistory()
+                                } else {
+                                    appDelegate.clearClipboardHistory()
+                                }
+                            }
+                        )) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Remember History")
+                                    .font(.system(size: 13))
+                                Text("Store clipboard items between sessions")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .toggleStyle(.switch)
+
+                        Toggle(isOn: $settingsManager.autoPasteEnabled) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Auto Paste on Selection")
+                                    .font(.system(size: 13))
+                                Text("Immediately paste the copied item after selection")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .toggleStyle(.switch)
                     }
 
                     Divider()
@@ -53,17 +85,13 @@ struct SettingsView: View {
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(.secondary)
 
-                        HStack {
-                            Text("Current Shortcut:")
-                                .font(.system(size: 13))
-                            Spacer()
-                            Text("⌘⇧C")
-                                .font(.system(size: 14, weight: .medium))
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(Color(NSColor.controlBackgroundColor))
-                                .cornerRadius(6)
-                        }
+                        ShortcutRecorder(shortcut: Binding(
+                            get: { settingsManager.keyboardShortcut },
+                            set: { newShortcut in
+                                settingsManager.keyboardShortcut = newShortcut
+                            }
+                        ))
+                        .frame(maxWidth: .infinity)
                     }
 
                     Divider()
@@ -89,6 +117,21 @@ struct SettingsView: View {
                             .buttonStyle(.borderedProminent)
                             .tint(.red)
                         }
+                    }
+
+                    Divider()
+
+                    // Layout Section
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Layout")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.secondary)
+
+                        Toggle("Show Pinned Items", isOn: $settingsManager.showPinned)
+                            .toggleStyle(.switch)
+
+                        Toggle("Show Recent Items", isOn: $settingsManager.showRecent)
+                            .toggleStyle(.switch)
                     }
 
                     Divider()
@@ -121,8 +164,7 @@ struct SettingsView: View {
         .alert("Clear Clipboard History", isPresented: $showClearHistoryAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Clear All", role: .destructive) {
-                appDelegate.clipboardItems.removeAll()
-                appDelegate.saveClipboardHistory()
+                appDelegate.clearClipboardHistory()
             }
         } message: {
             Text("Are you sure you want to clear all clipboard history? This action cannot be undone.")

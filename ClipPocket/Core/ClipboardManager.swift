@@ -14,7 +14,7 @@ class ClipboardManager: ObservableObject {
     func copyItemToClipboard(_ item: ClipboardItem) {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        
+
         switch item.type {
         case .text, .code, .color, .url, .email, .phone, .json:
             if let content = item.content as? String {
@@ -25,8 +25,20 @@ class ClipboardManager: ObservableObject {
                let image = NSImage(data: imageData) {
                 pasteboard.writeObjects([image])
             }
+        case .file:
+            // Copy file from source path
+            if let fileURL = item.content as? URL {
+                // Check if file still exists
+                if FileManager.default.fileExists(atPath: fileURL.path) {
+                    pasteboard.writeObjects([fileURL as NSURL])
+                    print("📁 Copied file reference to clipboard: \(fileURL.path)")
+                } else {
+                    print("❌ File no longer exists: \(fileURL.path)")
+                    // Could show an alert to the user here
+                }
+            }
         }
-        
+
         simulatePasteKeyPress()
     }
     

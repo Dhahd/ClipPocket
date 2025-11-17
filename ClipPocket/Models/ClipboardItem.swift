@@ -33,6 +33,7 @@ struct ClipboardItem: Identifiable, Codable {
         case email = "envelope"
         case phone = "phone"
         case json = "curlybraces"
+        case file = "doc.fill"
     }
     
     var displayString: String {
@@ -43,6 +44,13 @@ struct ClipboardItem: Identifiable, Codable {
             return "Image"
         case .color:
             return content as? String ?? "Invalid Color"
+        case .file:
+            if let url = content as? URL {
+                return url.lastPathComponent
+            } else if let path = content as? String {
+                return (path as NSString).lastPathComponent
+            }
+            return "File"
         }
     }
 
@@ -56,6 +64,7 @@ struct ClipboardItem: Identifiable, Codable {
         case .email: return "Email"
         case .phone: return "Phone"
         case .json: return "JSON"
+        case .file: return "File"
         }
     }
     
@@ -71,6 +80,16 @@ struct ClipboardItem: Identifiable, Codable {
             if let selfData = self.content as? Data,
                let otherData = other.content as? Data {
                 return selfData == otherData
+            }
+            return false
+        case (.file, .file):
+            if let selfURL = self.content as? URL,
+               let otherURL = other.content as? URL {
+                return selfURL.path == otherURL.path
+            }
+            if let selfPath = self.content as? String,
+               let otherPath = other.content as? String {
+                return selfPath == otherPath
             }
             return false
         default:
@@ -98,6 +117,12 @@ struct ClipboardItem: Identifiable, Codable {
             } else if let imageData = (content as? NSImage)?.tiffRepresentation {
                 try container.encode(imageData, forKey: .content)
             }
+        case .file:
+            if let url = content as? URL {
+                try container.encode(url.path, forKey: .content)
+            } else if let path = content as? String {
+                try container.encode(path, forKey: .content)
+            }
         }
         
         // Encode source application info
@@ -124,6 +149,12 @@ struct ClipboardItem: Identifiable, Codable {
                 content = imageData
             } else {
                 content = Data()
+            }
+        case .file:
+            if let path = try container.decodeIfPresent(String.self, forKey: .content) {
+                content = URL(fileURLWithPath: path)
+            } else {
+                content = URL(fileURLWithPath: "")
             }
         }
         

@@ -41,17 +41,19 @@ extension AppDelegate {
             return noErr
         }, 1, &eventType, Unmanaged.passUnretained(self).toOpaque(), nil)
 
-        // Register hotkey (Command-Shift-C)
+        let shortcut = settingsManager.keyboardShortcut
+
+        // Register hotkey using the user's shortcut
         let hotKeyRef = UnsafeMutablePointer<EventHotKeyRef?>.allocate(capacity: 1)
-        let status = RegisterEventHotKey(8, // Virtual key code for 'C'
-                                         UInt32(cmdKey + shiftKey),
+        let status = RegisterEventHotKey(shortcut.keyCode,
+                                         shortcut.modifiers,
                                          gMyHotKeyID,
                                          GetApplicationEventTarget(),
                                          0,
                                          hotKeyRef)
 
         if status == noErr {
-            print("✅ Hotkey ⌘⇧C registered successfully!")
+            print("✅ Hotkey \(shortcut.displayString) registered successfully!")
             self.hotKeyRef = hotKeyRef.pointee
         } else {
             print("❌ Error registering hotkey - status code: \(status)")

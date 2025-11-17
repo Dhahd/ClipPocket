@@ -31,6 +31,10 @@ struct DraggableClipboardItemCard: View {
                        let image = NSImage(data: imageData) {
                         provider.registerObject(image, visibility: .all)
                     }
+                case .file:
+                    if let url = item.content as? URL {
+                        provider.registerObject(url as NSURL, visibility: .all)
+                    }
                 }
 
                 return provider

@@ -1,73 +1,90 @@
 import SwiftUI
 import Carbon
+import AppKit
 
 struct ShortcutRecorder: View {
-    @Binding var shortcut: String
+    @Binding var shortcut: KeyboardShortcut
     @State private var isRecording = false
     @State private var localMonitor: Any?
-    
+    @EnvironmentObject var appDelegate: AppDelegate
+
     var body: some View {
-        Button(action: {
-            isRecording.toggle()
-            if isRecording {
-                startRecording()
-            } else {
-                stopRecording()
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Click to record a new shortcut")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+
+                Button(action: {
+                    isRecording.toggle()
+                    if isRecording {
+                        startRecording()
+                    } else {
+                        stopRecording()
+                    }
+                }) {
+                    HStack {
+                        Text(isRecording ? "Press keys..." : shortcut.displayString)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(isRecording ? .white : .primary)
+                        Spacer()
+                        if isRecording {
+                            Image(systemName: "circle.fill")
+                                .foregroundColor(.red)
+                                .font(.system(size: 8))
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(isRecording ? Color.red.opacity(0.3) : Color(NSColor.controlBackgroundColor))
+                    .cornerRadius(6)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(isRecording ? Color.red : Color.clear, lineWidth: 2)
+                    )
+                }
+                .buttonStyle(.plain)
             }
-        }) {
-            Text(isRecording ? "Recording..." : (shortcut.isEmpty ? "Record Shortcut" : shortcut))
-                .padding()
-                .background(isRecording ? Color.red.opacity(0.2) : Color.blue.opacity(0.2))
-                .cornerRadius(8)
+
+            Button(action: {
+                shortcut = .default
+                appDelegate.setupGlobalHotkey()
+            }) {
+                Image(systemName: "arrow.counterclockwise")
+                    .font(.system(size: 14))
+            }
+            .help("Reset to default (⌘⇧C)")
         }
-        .keyboardShortcut(.defaultAction)
     }
-    
+
     private func startRecording() {
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            shortcut = eventToString(event)
-            stopRecording()
+            // Require at least one modifier key
+            let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            guard !flags.isEmpty else {
+                NSSound.beep()
+                return nil
+            }
+
+            if let newShortcut = KeyboardShortcut(event: event) {
+                shortcut = newShortcut
+                stopRecording()
+
+                // Re-register the hotkey with the new shortcut
+                appDelegate.setupGlobalHotkey()
+            } else {
+                NSSound.beep()
+            }
+
             return nil
         }
     }
-    
+
     private func stopRecording() {
         if let monitor = localMonitor {
             NSEvent.removeMonitor(monitor)
             localMonitor = nil
         }
         isRecording = false
-    }
-    
-    private func eventToString(_ event: NSEvent) -> String {
-        var string = ""
-        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        
-        if flags.contains(.control) { string += "⌃" }
-        if flags.contains(.option) { string += "⌥" }
-        if flags.contains(.shift) { string += "⇧" }
-        if flags.contains(.command) { string += "⌘" }
-        
-        if let specialKey = event.specialKey {
-            string += specialKey.description
-        } else {
-            string += String(event.keyCode)
-        }
-        
-        return string
-    }
-}
-
-extension NSEvent.SpecialKey {
-    var description: String {
-        switch self {
-        case .tab: return "⇥"
-        case .delete: return "⌫"
-        case .leftArrow: return "←"
-        case .rightArrow: return "→"
-        case .upArrow: return "↑"
-        case .downArrow: return "↓"
-        default: return "Unknown"
-        }
     }
 }

@@ -16,8 +16,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     private var clipboardWindowController: ClipboardWindowController?
     private var isClipboardManagerVisible = false
     var hotKeyRef: EventHotKeyRef?
-    private let settingsManager = SettingsManager.shared
+    let settingsManager = SettingsManager.shared
     var statusItemView: StatusItemView?
+    private var saveTimer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -263,39 +264,122 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
     // MARK: - Persistence
 
-    private func loadPersistedClipboardHistory() {
-        guard let data = UserDefaults.standard.data(forKey: "ClipboardHistory") else {
-            print("No clipboard history found")
+    private func getClipboardHistoryFileURL() -> URL? {
+        guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return nil
+        }
+
+        let appDirectory = appSupport.appendingPathComponent("ClipPocket", isDirectory: true)
+
+        // Create directory if it doesn't exist
+        try? FileManager.default.createDirectory(at: appDirectory, withIntermediateDirectories: true)
+
+        return appDirectory.appendingPathComponent("ClipboardHistory.json")
+    }
+
+    func loadPersistedClipboardHistory() {
+        guard settingsManager.rememberHistory else {
+            print("Remember history is disabled, skipping load")
+            return
+        }
+
+        guard let fileURL = getClipboardHistoryFileURL() else {
+            print("Failed to get clipboard history file URL")
+            return
+        }
+
+        // Check if file exists
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+            print("No clipboard history file found")
             return
         }
 
         do {
+            let data = try Data(contentsOf: fileURL)
             let decoder = JSONDecoder()
             let loadedItems = try decoder.decode([ClipboardItem].self, from: data)
 
             // Load only the most recent items (keep 100 in memory)
             clipboardItems = Array(loadedItems.prefix(100))
-            print("Loaded \(clipboardItems.count) clipboard items from history")
+            print("✅ Loaded \(clipboardItems.count) clipboard items from history")
         } catch {
-            print("Failed to load clipboard history: \(error.localizedDescription)")
+            print("❌ Failed to load clipboard history: \(error.localizedDescription)")
             clipboardItems = []
         }
     }
 
     func saveClipboardHistory() {
-        do {
-            let encoder = JSONEncoder()
-            // Save only the most recent 1000 items to disk
-            let itemsToSave = Array(clipboardItems.prefix(1000))
-            let data = try encoder.encode(itemsToSave)
-            UserDefaults.standard.set(data, forKey: "ClipboardHistory")
-            print("Saved \(itemsToSave.count) clipboard items to history")
-        } catch {
-            print("Failed to save clipboard history: \(error.localizedDescription)")
+        guard settingsManager.rememberHistory else {
+            print("Remember history is disabled, skipping save")
+            return
         }
+
+        guard let fileURL = getClipboardHistoryFileURL() else {
+            print("Failed to get clipboard history file URL")
+            return
+        }
+
+        // Save asynchronously on background thread to avoid blocking UI
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            guard let self = self else { return }
+
+            do {
+                let encoder = JSONEncoder()
+                encoder.outputFormatting = .prettyPrinted
+
+                // Filter out items with large data (> 1MB per item) before saving
+                let itemsToSave = self.clipboardItems.prefix(1000).filter { item in
+                    // Skip very large images
+                    if case .image = item.type,
+                       let imageData = item.content as? Data,
+                       imageData.count > 1_048_576 { // 1MB
+                        print("⚠️ Skipping large image (\(imageData.count / 1024)KB) from history save")
+                        return false
+                    }
+                    return true
+                }
+
+                let data = try encoder.encode(Array(itemsToSave))
+                try data.write(to: fileURL, options: .atomic)
+                print("✅ Saved \(itemsToSave.count) clipboard items to history (\(data.count / 1024)KB)")
+            } catch {
+                print("❌ Failed to save clipboard history: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func debouncedSaveClipboardHistory() {
+        // Invalidate any existing timer
+        saveTimer?.invalidate()
+
+        // Schedule a new timer to save after 0.5 seconds
+        saveTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] _ in
+            self?.saveClipboardHistory()
+        }
+    }
+
+    func clearClipboardHistory() {
+        clipboardItems.removeAll()
+
+        if let fileURL = getClipboardHistoryFileURL() {
+            try? FileManager.default.removeItem(at: fileURL)
+        }
+
+        // Also remove old UserDefaults data if it exists
+        UserDefaults.standard.removeObject(forKey: "ClipboardHistory")
+
+        print("✅ Cleared clipboard history")
     }
     
     func readClipboardItem(from pasteboard: NSPasteboard, sourceApp: NSRunningApplication?) -> ClipboardItem? {
+        // Check for file URLs first (when copying files from Finder)
+        if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL],
+           let fileURL = urls.first,
+           fileURL.isFileURL {
+            print("📁 Detected file copy: \(fileURL.path)")
+            return ClipboardItem(content: fileURL, type: .file, timestamp: Date(), sourceApplication: sourceApp)
+        }
+
         // Check for image
         if let image = NSImage(pasteboard: pasteboard) {
             if let tiffData = image.tiffRepresentation {
@@ -436,6 +520,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
                     pasteboard.setData(try? NSKeyedArchiver.archivedData(withRootObject: color, requiringSecureCoding: true), forType: .color)
                 }
             }
+        case .file:
+            if let fileURL = item.content as? URL {
+                if FileManager.default.fileExists(atPath: fileURL.path) {
+                    pasteboard.writeObjects([fileURL as NSURL])
+                }
+            }
         }
         animateStatusItemIcon()
         // Move the selected item to the top of the list
@@ -451,7 +541,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
     func deleteClipboardItem(_ item: ClipboardItem) {
         clipboardItems.removeAll(where: { $0.id == item.id })
-        saveClipboardHistory()
+        debouncedSaveClipboardHistory()
     }
 
     // MARK: - Pinned Item Management

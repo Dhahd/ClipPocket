@@ -51,8 +51,6 @@ struct SettingsView: View {
                                         settingsManager.rememberHistory = newValue
                                         if newValue {
                                             appDelegate.loadPersistedClipboardHistory()
-                                        } else {
-                                            appDelegate.clearClipboardHistory()
                                         }
                                     }
                                 )

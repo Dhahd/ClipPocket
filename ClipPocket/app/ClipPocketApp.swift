@@ -282,18 +282,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     }
 
     // MARK: - Persistence
-
-    private func getClipboardHistoryFileURL() -> URL? {
+    private var historyDirectoryURL: URL? {
         guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
             return nil
         }
-
         let appDirectory = appSupport.appendingPathComponent("ClipPocket", isDirectory: true)
-
-        // Create directory if it doesn't exist
         try? FileManager.default.createDirectory(at: appDirectory, withIntermediateDirectories: true)
+        return appDirectory
+    }
 
-        return appDirectory.appendingPathComponent("ClipboardHistory.json")
+    private func historyFileURL() -> URL? {
+        historyDirectoryURL?.appendingPathComponent("clipboardHistory.json")
+    }
+
+    private func legacyHistoryFileURL() -> URL? {
+        historyDirectoryURL?.appendingPathComponent("ClipboardHistory.json")
     }
 
     func loadPersistedClipboardHistory() {
@@ -302,9 +305,31 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             return
         }
 
-        guard let fileURL = getClipboardHistoryFileURL() else {
+        guard let fileURL = historyFileURL() else {
             print("Failed to get clipboard history file URL")
             return
+        }
+
+        // Migrate legacy capitalized filename if present (case-sensitive volumes)
+        if let legacyURL = legacyHistoryFileURL(),
+           !FileManager.default.fileExists(atPath: fileURL.path),
+           FileManager.default.fileExists(atPath: legacyURL.path) {
+            try? FileManager.default.moveItem(at: legacyURL, to: fileURL)
+        }
+
+        // Fallback: migrate very old UserDefaults blob if no file exists
+        if !FileManager.default.fileExists(atPath: fileURL.path),
+           let legacyData = UserDefaults.standard.data(forKey: "ClipboardHistory") {
+            do {
+                let decoder = JSONDecoder()
+                let legacyItems = try decoder.decode([ClipboardItem].self, from: legacyData)
+                clipboardItems = Array(legacyItems.prefix(100))
+                saveClipboardHistory() // persist to file under the new location
+                print("✅ Migrated clipboard history from UserDefaults (\(clipboardItems.count) items)")
+                return
+            } catch {
+                print("❌ Failed to migrate legacy history: \(error.localizedDescription)")
+            }
         }
 
         // Check if file exists
@@ -333,7 +358,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             return
         }
 
-        guard let fileURL = getClipboardHistoryFileURL() else {
+        guard let fileURL = historyFileURL() else {
             print("Failed to get clipboard history file URL")
             return
         }
@@ -380,7 +405,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     func clearClipboardHistory() {
         clipboardItems.removeAll()
 
-        if let fileURL = getClipboardHistoryFileURL() {
+        if let fileURL = historyFileURL() {
             try? FileManager.default.removeItem(at: fileURL)
         }
 
@@ -434,17 +459,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     private func detectContentType(from string: String) -> ClipboardItem.ItemType {
         let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        // URL detection
-        if let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue),
-           let match = detector.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)),
-           match.range.length == trimmed.count {
-            return .url
-        }
-
         // Email detection
         if trimmed.range(of: #"^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$"#,
                         options: [.regularExpression, .caseInsensitive]) != nil {
             return .email
+        }
+
+        // URL detection (skip mailto: which should be treated as email)
+        if let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue),
+           let match = detector.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)),
+           match.range.length == trimmed.count {
+            if match.url?.scheme?.lowercased() == "mailto" {
+                return .email
+            }
+            return .url
         }
 
         // Phone number detection
@@ -512,6 +540,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
                 if self.saveCounter % 30 == 0 {
                     self.saveClipboardHistory()
                 }
+
+                // Persist new items shortly after they are added
+                self.debouncedSaveClipboardHistory()
             }
         }
     }

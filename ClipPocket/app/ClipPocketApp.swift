@@ -23,6 +23,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     @Published var isIncognitoMode: Bool = false
     @Published var showOnboarding = false
     private var onboardingWindow: NSWindow?
+    private var lastFocusedApp: NSRunningApplication?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -139,6 +140,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         if isClipboardManagerVisible {
             hideClipboardManager()
         } else {
+            // Remember where the user was so we can return focus for auto-paste
+            lastFocusedApp = NSWorkspace.shared.frontmostApplication
             showClipboardManager()
         }
     }
@@ -750,9 +753,52 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             clipboardItems.insert(movedItem, at: 0)
         }
         
+        autoPasteIfEnabled(for: item)
+        
         DispatchQueue.main.async {
             self.isInternalCopy = false
         }
+    }
+    
+    private func autoPasteIfEnabled(for item: ClipboardItem) {
+        guard settingsManager.autoPasteEnabled else { return }
+
+        // Only auto-paste textual content types to avoid unexpected behavior for non-text items.
+        switch item.type {
+        case .text, .code, .color, .url, .email, .phone, .json:
+            break
+        default:
+            return
+        }
+
+        let targetApp = lastFocusedApp
+
+        // Reactivate the target app before sending Cmd+V
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            targetApp?.activate(options: [.activateIgnoringOtherApps])
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                self.simulatePasteKeyPress()
+            }
+        }
+    }
+
+    private func simulatePasteKeyPress() {
+        guard let source = CGEventSource(stateID: .hidSystemState) else { return }
+
+        let cmdDown = CGEvent(keyboardEventSource: source, virtualKey: 0x37, keyDown: true)
+        let vDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true)
+        let vUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false)
+        let cmdUp = CGEvent(keyboardEventSource: source, virtualKey: 0x37, keyDown: false)
+
+        cmdDown?.flags = .maskCommand
+        vDown?.flags = .maskCommand
+        vUp?.flags = .maskCommand
+
+        cmdDown?.post(tap: .cghidEventTap)
+        vDown?.post(tap: .cghidEventTap)
+        vUp?.post(tap: .cghidEventTap)
+        cmdUp?.post(tap: .cghidEventTap)
     }
 
     func deleteClipboardItem(_ item: ClipboardItem) {

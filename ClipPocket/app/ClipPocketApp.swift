@@ -49,6 +49,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             UpdateChecker.shared.checkForUpdatesOnLaunch()
         }
     }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        // Cancel any pending debounced save
+        saveTimer?.invalidate()
+
+        // Perform final synchronous save to ensure all items are persisted
+        saveSynchronously()
+    }
     
     private func setLaunchAtLogin(_ enabled: Bool) {
         if enabled {
@@ -59,7 +67,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     }
     
     @objc func quitApp() {
-        saveClipboardHistory()
+        // Cancel any pending debounced saves
+        saveTimer?.invalidate()
+        // Save synchronously to ensure all items are persisted before quitting
+        saveSynchronously()
         NSApp.terminate(nil)
     }
 
@@ -333,7 +344,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             do {
                 let decoder = JSONDecoder()
                 let legacyItems = try decoder.decode([ClipboardItem].self, from: legacyData)
-                clipboardItems = Array(legacyItems.prefix(100))
+
+                // Apply limit only if enabled
+                if settingsManager.enableHistoryLimit {
+                    let maxItems = settingsManager.maxHistoryItems
+                    clipboardItems = Array(legacyItems.prefix(maxItems))
+                } else {
+                    clipboardItems = legacyItems
+                }
+
                 saveClipboardHistory() // persist to file under the new location
                 print("✅ Migrated clipboard history from UserDefaults (\(clipboardItems.count) items)")
                 return
@@ -353,9 +372,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             let decoder = JSONDecoder()
             let loadedItems = try decoder.decode([ClipboardItem].self, from: data)
 
-            // Load only the most recent items (keep 100 in memory)
-            clipboardItems = Array(loadedItems.prefix(100))
-            print("✅ Loaded \(clipboardItems.count) clipboard items from history")
+            // Load items - apply limit only if enabled
+            if settingsManager.enableHistoryLimit {
+                let maxItems = settingsManager.maxHistoryItems
+                clipboardItems = Array(loadedItems.prefix(maxItems))
+                print("✅ Loaded \(clipboardItems.count) clipboard items from history (limit: \(maxItems))")
+            } else {
+                clipboardItems = loadedItems
+                print("✅ Loaded \(clipboardItems.count) clipboard items from history (no limit)")
+            }
         } catch {
             print("❌ Failed to load clipboard history: \(error.localizedDescription)")
             clipboardItems = []
@@ -399,6 +424,41 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             } catch {
                 print("❌ Failed to save clipboard history: \(error.localizedDescription)")
             }
+        }
+    }
+
+    private func saveSynchronously() {
+        guard settingsManager.rememberHistory else {
+            print("Remember history is disabled, skipping save")
+            return
+        }
+
+        guard let fileURL = historyFileURL() else {
+            print("Failed to get clipboard history file URL")
+            return
+        }
+
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .prettyPrinted
+
+            // Filter out items with large data (> 1MB per item) before saving
+            let itemsToSave = clipboardItems.prefix(1000).filter { item in
+                // Skip very large images
+                if case .image = item.type,
+                   let imageData = item.content as? Data,
+                   imageData.count > 1_048_576 { // 1MB
+                    print("⚠️ Skipping large image (\(imageData.count / 1024)KB) from history save")
+                    return false
+                }
+                return true
+            }
+
+            let data = try encoder.encode(Array(itemsToSave))
+            try data.write(to: fileURL, options: .atomic)
+            print("✅ [SYNC] Saved \(itemsToSave.count) clipboard items to history (\(data.count / 1024)KB)")
+        } catch {
+            print("❌ Failed to save clipboard history synchronously: \(error.localizedDescription)")
         }
     }
 
@@ -537,10 +597,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             if !self.clipboardItems.contains(where: { $0.isEqual(to: item) }) {
                 self.clipboardItems.insert(item, at: 0)
 
-                // Trim the list if it exceeds a certain limit (e.g., 100 items)
-                let maxItems = 100
-                if self.clipboardItems.count > maxItems {
-                    self.clipboardItems = Array(self.clipboardItems.prefix(maxItems))
+                // Trim the list if history limit is enabled and exceeds the configured limit
+                if self.settingsManager.enableHistoryLimit {
+                    let maxItems = self.settingsManager.maxHistoryItems
+                    if self.clipboardItems.count > maxItems {
+                        self.clipboardItems = Array(self.clipboardItems.prefix(maxItems))
+                    }
                 }
 
                 print("Added new clipboard item: \(item.displayString)")

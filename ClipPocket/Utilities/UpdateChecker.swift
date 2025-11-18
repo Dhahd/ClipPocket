@@ -10,15 +10,12 @@ class UpdateChecker: NSObject, ObservableObject {
     @Published var latestVersion: String?
     @Published var downloadURL: String?
     @Published var releaseNotes: String?
-    @Published var isDownloadingUpdate = false
-    @Published var downloadProgress: Double = 0.0
 
     private var currentVersion: String {
         return AppVersion.current
     }
     private let githubOwner = "Dhahd"
     private let githubRepo = "ClipPocket"
-    private var downloadTask: URLSessionDownloadTask?
 
     private override init() {
         super.init()
@@ -183,22 +180,17 @@ class UpdateChecker: NSObject, ObservableObject {
 
             \(self.releaseNotes ?? "")
 
-            Would you like to download it now?
+            Click "Download" to open the releases page in your browser.
             """
             alert.alertStyle = .informational
             alert.addButton(withTitle: "Download")
             alert.addButton(withTitle: "Later")
-            alert.addButton(withTitle: "Release Notes")
 
             let response = alert.runModal()
 
-            switch response {
-            case .alertFirstButtonReturn: // Download
-                self.downloadAndInstallUpdate()
-            case .alertThirdButtonReturn: // Release Notes
+            if response == .alertFirstButtonReturn {
+                // Open releases page in browser
                 self.openReleasePage()
-            default:
-                break
             }
         }
     }
@@ -207,9 +199,9 @@ class UpdateChecker: NSObject, ObservableObject {
         DispatchQueue.main.async {
             let content = UNMutableNotificationContent()
             content.title = "ClipPocket Update Available"
-            content.body = "Version \(self.latestVersion ?? "Unknown") is now available. Click to download."
+            content.body = "Version \(self.latestVersion ?? "Unknown") is now available. Click to view releases."
             content.sound = .default
-            content.userInfo = ["action": "download"]
+            content.userInfo = ["action": "open_releases"]
 
             let request = UNNotificationRequest(
                 identifier: "update-available",
@@ -277,130 +269,6 @@ class UpdateChecker: NSObject, ObservableObject {
         }
     }
 
-    private func downloadAndInstallUpdate() {
-        guard let urlString = downloadURL,
-              let url = URL(string: urlString) else {
-            showDownloadError("Invalid download URL")
-            return
-        }
-
-        isDownloadingUpdate = true
-        downloadProgress = 0.0
-
-        let configuration = URLSessionConfiguration.default
-        let session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
-
-        downloadTask = session.downloadTask(with: url)
-        downloadTask?.resume()
-
-        // Show progress alert
-        showDownloadProgressAlert()
-    }
-
-    private func showDownloadProgressAlert() {
-        // Don't show modal dialog - just show a notification instead
-        // Modal dialogs during downloads are problematic
-        DispatchQueue.main.async {
-            let notification = NSUserNotification()
-            notification.title = "Downloading Update"
-            notification.informativeText = "Downloading ClipPocket \(self.latestVersion ?? "")..."
-            notification.soundName = nil
-            NSUserNotificationCenter.default.deliver(notification)
-        }
-    }
-
-    private func installDMG(at fileURL: URL) {
-        DispatchQueue.main.async {
-            self.isDownloadingUpdate = false
-
-            let alert = NSAlert()
-            alert.messageText = "Update Downloaded!"
-            alert.informativeText = """
-            ClipPocket \(self.latestVersion ?? "") has been downloaded successfully.
-
-            Click "Install" to open the installer. You'll need to:
-            1. Drag the new version to Applications (replacing the old one)
-            2. Restart ClipPocket
-
-            The installer will open automatically.
-            """
-            alert.alertStyle = .informational
-            alert.addButton(withTitle: "Install Now")
-            alert.addButton(withTitle: "Install Later")
-
-            let response = alert.runModal()
-
-            if response == .alertFirstButtonReturn {
-                // Open the DMG file
-                NSWorkspace.shared.open(fileURL)
-
-                // Show instructions
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                    let instructionsAlert = NSAlert()
-                    instructionsAlert.messageText = "Installation Instructions"
-                    instructionsAlert.informativeText = """
-                    The installer has been opened.
-
-                    To complete the update:
-                    1. Drag ClipPocket to the Applications folder
-                    2. Replace the existing version when prompted
-                    3. Quit this app and launch the new version
-
-                    Would you like to quit ClipPocket now?
-                    """
-                    instructionsAlert.alertStyle = .informational
-                    instructionsAlert.addButton(withTitle: "Quit ClipPocket")
-                    instructionsAlert.addButton(withTitle: "I'll Do It Later")
-
-                    let quitResponse = instructionsAlert.runModal()
-                    if quitResponse == .alertFirstButtonReturn {
-                        NSApplication.shared.terminate(nil)
-                    }
-                }
-            } else {
-                // Save DMG location for later
-                let downloadsFolder = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
-                if let downloadsFolder = downloadsFolder {
-                    let destinationURL = downloadsFolder.appendingPathComponent(fileURL.lastPathComponent)
-                    try? FileManager.default.moveItem(at: fileURL, to: destinationURL)
-
-                    let laterAlert = NSAlert()
-                    laterAlert.messageText = "Update Saved"
-                    laterAlert.informativeText = "The installer has been saved to your Downloads folder:\n\n\(fileURL.lastPathComponent)\n\nYou can install it whenever you're ready."
-                    laterAlert.alertStyle = .informational
-                    laterAlert.addButton(withTitle: "OK")
-                    laterAlert.runModal()
-                }
-            }
-        }
-    }
-
-    private func showDownloadError(_ message: String) {
-        DispatchQueue.main.async {
-            self.isDownloadingUpdate = false
-
-            let alert = NSAlert()
-            alert.messageText = "Download Failed"
-            alert.informativeText = message
-            alert.alertStyle = .warning
-            alert.addButton(withTitle: "OK")
-            alert.addButton(withTitle: "Download Manually")
-
-            let response = alert.runModal()
-            if response == .alertSecondButtonReturn {
-                self.openDownloadPage()
-            }
-        }
-    }
-
-    private func openDownloadPage() {
-        if let urlString = downloadURL,
-           let url = URL(string: urlString) {
-            NSWorkspace.shared.open(url)
-        } else {
-            openReleasePage()
-        }
-    }
 
     private func openReleasePage() {
         let urlString = "https://github.com/\(githubOwner)/\(githubRepo)/releases/latest"
@@ -410,38 +278,6 @@ class UpdateChecker: NSObject, ObservableObject {
     }
 }
 
-// MARK: - URLSession Download Delegate
-
-extension UpdateChecker: URLSessionDownloadDelegate {
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
-        // Move downloaded file to temporary location with proper name
-        let tempDir = FileManager.default.temporaryDirectory
-        let destinationURL = tempDir.appendingPathComponent("ClipPocket-Update.dmg")
-
-        // Remove old file if exists
-        try? FileManager.default.removeItem(at: destinationURL)
-
-        do {
-            try FileManager.default.moveItem(at: location, to: destinationURL)
-            installDMG(at: destinationURL)
-        } catch {
-            showDownloadError("Failed to save update: \(error.localizedDescription)")
-        }
-    }
-
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
-        let progress = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
-        DispatchQueue.main.async {
-            self.downloadProgress = progress
-        }
-    }
-
-    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        if let error = error {
-            showDownloadError(error.localizedDescription)
-        }
-    }
-}
 
 // MARK: - Models
 

@@ -115,7 +115,7 @@ struct ClipboardManagerContent: View {
         GeometryReader { geometry in
             VStack(spacing: 0) {
                 // Header with search and controls
-                HStack {
+                HStack(alignment: .top, spacing: 16) {
                     VStack(alignment: .leading, spacing: 8) {
                         SearchBar(text: $searchText, isFocused: $searchFieldFocused)
                             .frame(minWidth: 300)
@@ -143,7 +143,7 @@ struct ClipboardManagerContent: View {
                     }
 
                     Spacer()
-                    
+
                     // Section selector
                     HStack(spacing: 4) {
                         ForEach(ClipboardSection.allCases, id: \.self) { section in
@@ -162,9 +162,9 @@ struct ClipboardManagerContent: View {
                         RoundedRectangle(cornerRadius: 10)
                             .fill(Color.white.opacity(0.06))
                     )
-                    
+
                     Spacer()
-                    
+
                     Button(action: {
                         NSApp.sendAction(#selector(AppDelegate.openSettings), to: nil, from: nil)
                     }) {
@@ -173,7 +173,7 @@ struct ClipboardManagerContent: View {
                     }
                     .buttonStyle(PlainButtonStyle())
                     .help("Open Settings")
-                    
+
                     Button(action: {
                         NSApp.sendAction(#selector(AppDelegate.hideClipboardManager), to: nil, from: nil)
                     }) {

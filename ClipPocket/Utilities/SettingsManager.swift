@@ -13,6 +13,8 @@ class SettingsManager: ObservableObject {
         static let showRecent = "showRecent"
         static let showPinned = "showPinned"
         static let autoPasteEnabled = "autoPasteEnabled"
+        static let maxHistoryItems = "maxHistoryItems"
+        static let enableHistoryLimit = "enableHistoryLimit"
     }
     
     @Published var launchAtLogin: Bool {
@@ -42,6 +44,18 @@ class SettingsManager: ObservableObject {
     @Published var autoPasteEnabled: Bool {
         didSet {
             defaults.set(autoPasteEnabled, forKey: Keys.autoPasteEnabled)
+        }
+    }
+
+    @Published var maxHistoryItems: Int {
+        didSet {
+            defaults.set(maxHistoryItems, forKey: Keys.maxHistoryItems)
+        }
+    }
+
+    @Published var enableHistoryLimit: Bool {
+        didSet {
+            defaults.set(enableHistoryLimit, forKey: Keys.enableHistoryLimit)
         }
     }
 
@@ -88,6 +102,18 @@ class SettingsManager: ObservableObject {
             defaults.set(false, forKey: Keys.autoPasteEnabled)
         }
         self.autoPasteEnabled = defaults.bool(forKey: Keys.autoPasteEnabled)
+
+        // Set default for maxHistoryItems if not set
+        if defaults.object(forKey: Keys.maxHistoryItems) == nil {
+            defaults.set(100, forKey: Keys.maxHistoryItems)
+        }
+        self.maxHistoryItems = defaults.integer(forKey: Keys.maxHistoryItems)
+
+        // Set default for enableHistoryLimit if not set (disabled by default for backward compatibility)
+        if defaults.object(forKey: Keys.enableHistoryLimit) == nil {
+            defaults.set(false, forKey: Keys.enableHistoryLimit)
+        }
+        self.enableHistoryLimit = defaults.bool(forKey: Keys.enableHistoryLimit)
     }
 
     private func persistKeyboardShortcut() {
@@ -103,5 +129,7 @@ class SettingsManager: ObservableObject {
         showRecent = true
         showPinned = true
         autoPasteEnabled = false
+        maxHistoryItems = 100
+        enableHistoryLimit = false
     }
 }

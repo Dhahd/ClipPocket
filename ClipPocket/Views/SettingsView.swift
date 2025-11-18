@@ -97,6 +97,42 @@ struct SettingsView: View {
                             .textCase(.uppercase)
 
                         VStack(spacing: 12) {
+                            // Enable history limit toggle
+                            SettingRow(
+                                title: "Limit History Size",
+                                description: "Automatically remove old items to save storage",
+                                toggle: $settingsManager.enableHistoryLimit
+                            )
+
+                            // Maximum items setting (only shown when limit is enabled)
+                            if settingsManager.enableHistoryLimit {
+                                VStack(alignment: .leading, spacing: 12) {
+                                    HStack(alignment: .center, spacing: 16) {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text("Maximum History Items")
+                                                .font(.system(size: 14, weight: .medium))
+                                            Text("Keep up to \(settingsManager.maxHistoryItems) items in history")
+                                                .font(.system(size: 12))
+                                                .foregroundColor(.secondary)
+                                        }
+                                        Spacer()
+                                        Stepper(
+                                            value: $settingsManager.maxHistoryItems,
+                                            in: 10...1000,
+                                            step: 10
+                                        ) {
+                                            Text("\(settingsManager.maxHistoryItems)")
+                                                .font(.system(size: 14, weight: .medium))
+                                                .frame(minWidth: 50)
+                                        }
+                                    }
+                                    .padding(16)
+                                    .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                                    .cornerRadius(8)
+                                }
+                                .transition(.opacity.combined(with: .move(edge: .top)))
+                            }
+
                             HStack(alignment: .center, spacing: 16) {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text("Clipboard History")

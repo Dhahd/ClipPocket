@@ -59,14 +59,6 @@ ClipPocket respects your privacy:
 ClipPocket automatically checks for updates. You can also manually check in:
 Settings → About → Check for Updates
 
-## License
-
-© 2024 Shaneen Dhahd. All rights reserved.
-
-## Version
-
-2.0.0
-
 ---
 
 Made with ❤️ for macOS

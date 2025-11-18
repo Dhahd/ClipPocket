@@ -214,11 +214,11 @@ struct ClipboardManagerContent: View {
                             } else {
                                 ForEach(filteredPinnedItems) { pinnedItem in
                                     DraggableClipboardItemCard(item: pinnedItem.originalItem)
+                                        .scaleEffect(hoveredItemId == pinnedItem.id ? 1.05 : 1.0)
+                                        .animation(.easeInOut(duration: 0.2), value: hoveredItemId)
                                         .onHover { isHovered in
                                             hoveredItemId = isHovered ? pinnedItem.id : nil
                                         }
-                                        .scaleEffect(hoveredItemId == pinnedItem.id ? 1.05 : 1.0)
-                                        .animation(.easeInOut(duration: 0.2), value: hoveredItemId)
                                         .onTapGesture {
                                             appDelegate.copyItemToClipboard(pinnedItem.originalItem)
                                             NSApp.sendAction(#selector(AppDelegate.hideClipboardManager), to: nil, from: nil)
@@ -305,11 +305,11 @@ struct ClipboardManagerContent: View {
                             } else {
                                 ForEach(filteredRecentItems) { item in
                                     DraggableClipboardItemCard(item: item)
+                                        .scaleEffect(hoveredItemId == item.id ? 1.05 : 1.0)
+                                        .animation(.easeInOut(duration: 0.2), value: hoveredItemId)
                                         .onHover { isHovered in
                                             hoveredItemId = isHovered ? item.id : nil
                                         }
-                                        .scaleEffect(hoveredItemId == item.id ? 1.05 : 1.0)
-                                        .animation(.easeInOut(duration: 0.2), value: hoveredItemId)
                                         .onTapGesture {
                                             appDelegate.copyItemToClipboard(item)
                                             NSApp.sendAction(#selector(AppDelegate.hideClipboardManager), to: nil, from: nil)
@@ -401,11 +401,11 @@ struct ClipboardManagerContent: View {
                             } else {
                                 ForEach(filteredHistoryItems) { item in
                                     DraggableClipboardItemCard(item: item)
+                                        .scaleEffect(hoveredItemId == item.id ? 1.05 : 1.0)
+                                        .animation(.easeInOut(duration: 0.2), value: hoveredItemId)
                                         .onHover { isHovered in
                                             hoveredItemId = isHovered ? item.id : nil
                                         }
-                                        .scaleEffect(hoveredItemId == item.id ? 1.05 : 1.0)
-                                        .animation(.easeInOut(duration: 0.2), value: hoveredItemId)
                                         .onTapGesture {
                                             appDelegate.copyItemToClipboard(item)
                                             NSApp.sendAction(#selector(AppDelegate.hideClipboardManager), to: nil, from: nil)

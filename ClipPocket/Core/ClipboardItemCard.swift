@@ -16,7 +16,6 @@ struct ClipboardItemCard: View {
     let item: ClipboardItem
     @State private var headerColor: Color = .blue
     @State private var isHovered: Bool = false
-    @State private var mouseLocation: CGPoint = .zero
 
     var body: some View {
         VStack(spacing: 0) {
@@ -81,11 +80,6 @@ struct ClipboardItemCard: View {
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
-
-                // Mouse-following shimmer effect
-                if isHovered {
-                    LiquidGlassCardShimmer(mouseLocation: mouseLocation)
-                }
             }
         )
         .cornerRadius(12)
@@ -94,8 +88,8 @@ struct ClipboardItemCard: View {
                 .stroke(
                     LinearGradient(
                         colors: [
-                            Color.white.opacity(isHovered ? 0.4 : 0.2),
-                            Color.white.opacity(isHovered ? 0.2 : 0.1)
+                            Color.white.opacity(0.2),
+                            Color.white.opacity(0.1)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -104,27 +98,11 @@ struct ClipboardItemCard: View {
                 )
         )
         .shadow(color: Color.black.opacity(0.3), radius: 8, x: 0, y: 4)
-        .shadow(color: Color.black.opacity(isHovered ? 0.2 : 0), radius: 16, x: 0, y: 8)
-        .scaleEffect(isHovered ? 1.03 : 1.0)
-        .rotation3DEffect(
-            .degrees(isHovered ? calculateTiltAngle() : 0),
-            axis: calculateTiltAxis(),
-            perspective: 0.5
-        )
-        .animation(.spring(response: 0.25, dampingFraction: 0.6), value: isHovered)
-        .animation(.interpolatingSpring(stiffness: 200, damping: 15), value: mouseLocation)
+        .scaleEffect(isHovered ? 1.05 : 1.0)
+        .animation(.easeInOut(duration: 0.2), value: isHovered)
         .onHover { hovering in
             isHovered = hovering
         }
-        .background(
-            GeometryReader { geometry in
-                MouseTrackingView { location in
-                    // Convert to local coordinates
-                    self.mouseLocation = location
-                }
-                .frame(width: geometry.size.width, height: geometry.size.height)
-            }
-        )
         .onAppear {
             if item.type == .color, let cardColor = colorFromItem() {
                 headerColor = cardColor
@@ -140,33 +118,6 @@ struct ClipboardItemCard: View {
             return Color(nsColor: nsColor)
         }
         return nil
-    }
-
-    // Calculate gooey tilt angle based on mouse position
-    private func calculateTiltAngle() -> Double {
-        let centerX: CGFloat = 120 // Half of card width (240/2)
-        let centerY: CGFloat = 90  // Half of card height (180/2)
-
-        let deltaX = mouseLocation.x - centerX
-        let deltaY = mouseLocation.y - centerY
-
-        let distance = sqrt(deltaX * deltaX + deltaY * deltaY)
-        return min(distance / 10, 5) // Max 5 degrees tilt
-    }
-
-    // Calculate tilt axis for gooey effect
-    private func calculateTiltAxis() -> (x: CGFloat, y: CGFloat, z: CGFloat) {
-        let centerX: CGFloat = 120
-        let centerY: CGFloat = 90
-
-        let deltaX = mouseLocation.x - centerX
-        let deltaY = mouseLocation.y - centerY
-
-        // Normalize and invert for natural tilt direction
-        let axisX = deltaY / 90
-        let axisY = -deltaX / 120
-
-        return (x: axisX, y: axisY, z: 0)
     }
 
     @ViewBuilder
@@ -402,112 +353,4 @@ class ClipboardItemWrapper: NSObject, NSItemProviderWriting, NSItemProviderReadi
             let clipboardItem = ClipboardItem(content: content, type: type, timestamp: Date(), sourceApplication: nil)
             return self.init(clipboardItem)
         }
-}
-
-// Gooey liquid effect for card hover state
-struct LiquidGlassCardShimmer: View {
-    let mouseLocation: CGPoint
-
-    var body: some View {
-        GeometryReader { geometry in
-            let normalizedX = max(0, min(1, mouseLocation.x / geometry.size.width))
-            let normalizedY = max(0, min(1, 1 - (mouseLocation.y / geometry.size.height))) // Invert Y
-
-            ZStack {
-                // Main gooey spotlight - barely noticeable
-                RadialGradient(
-                    colors: [
-                        Color.white.opacity(0.06),
-                        Color.white.opacity(0.03),
-                        Color.white.opacity(0.01),
-                        Color.clear
-                    ],
-                    center: UnitPoint(x: normalizedX, y: normalizedY),
-                    startRadius: 0,
-                    endRadius: 60
-                )
-
-                // Secondary blob for gooey effect - very subtle
-                RadialGradient(
-                    colors: [
-                        Color.white.opacity(0.04),
-                        Color.white.opacity(0.015),
-                        Color.clear
-                    ],
-                    center: UnitPoint(
-                        x: normalizedX + 0.05,
-                        y: normalizedY - 0.05
-                    ),
-                    startRadius: 0,
-                    endRadius: 40
-                )
-                .blur(radius: 8)
-            }
-            .blur(radius: 4) // Overall blur for gooey effect
-        }
-        .allowsHitTesting(false)
-    }
-}
-
-// Mouse tracking view to capture mouse movements
-struct MouseTrackingView: NSViewRepresentable {
-    var onMouseMoved: (CGPoint) -> Void
-
-    func makeNSView(context: Context) -> NSView {
-        let view = MouseTrackingNSView()
-        view.onMouseMoved = onMouseMoved
-        return view
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {
-        if let trackingView = nsView as? MouseTrackingNSView {
-            trackingView.onMouseMoved = onMouseMoved
-        }
-    }
-}
-
-class MouseTrackingNSView: NSView {
-    var onMouseMoved: ((CGPoint) -> Void)?
-    private var trackingArea: NSTrackingArea?
-
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-
-        if let trackingArea = trackingArea {
-            removeTrackingArea(trackingArea)
-        }
-
-        let options: NSTrackingArea.Options = [
-            .activeAlways,
-            .mouseMoved,
-            .mouseEnteredAndExited,
-            .inVisibleRect
-        ]
-
-        trackingArea = NSTrackingArea(
-            rect: bounds,
-            options: options,
-            owner: self,
-            userInfo: nil
-        )
-
-        if let trackingArea = trackingArea {
-            addTrackingArea(trackingArea)
-        }
-    }
-
-    override func mouseMoved(with event: NSEvent) {
-        let location = convert(event.locationInWindow, from: nil)
-        onMouseMoved?(location)
-    }
-
-    override func mouseEntered(with event: NSEvent) {
-        let location = convert(event.locationInWindow, from: nil)
-        onMouseMoved?(location)
-    }
-
-    override func mouseDragged(with event: NSEvent) {
-        let location = convert(event.locationInWindow, from: nil)
-        onMouseMoved?(location)
-    }
 }

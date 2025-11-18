@@ -368,18 +368,56 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         }
 
         do {
-            let data = try Data(contentsOf: fileURL)
+            let attributes = try FileManager.default.attributesOfItem(atPath: fileURL.path)
+            let fileSizeBytes = (attributes[.size] as? NSNumber)?.int64Value ?? 0
+            let fileSize = Int(fileSizeBytes / 1024 / 1024) // MB
+
+            // Protect against runaway memory usage from legacy, oversized files
+            if fileSize > 250 { // 250MB guardrail
+                print("⚠️ History file too large (\(fileSize)MB). Skipping load to avoid memory pressure.")
+                return
+            }
+
+            // Use memory mapping to avoid loading the entire file into RAM at once
+            let data = try Data(contentsOf: fileURL, options: .mappedIfSafe)
+            print("📂 Loading clipboard history: \(data.count / 1024 / 1024)MB (mapped)")
+            let containsLegacyIcons = data.range(of: Data("\"sourceIcon\"".utf8)) != nil
+
             let decoder = JSONDecoder()
             let loadedItems = try decoder.decode([ClipboardItem].self, from: data)
 
-            // Load items - apply limit only if enabled
-            if settingsManager.enableHistoryLimit {
-                let maxItems = settingsManager.maxHistoryItems
-                clipboardItems = Array(loadedItems.prefix(maxItems))
-                print("✅ Loaded \(clipboardItems.count) clipboard items from history (limit: \(maxItems))")
-            } else {
-                clipboardItems = loadedItems
-                print("✅ Loaded \(clipboardItems.count) clipboard items from history (no limit)")
+            // AGGRESSIVE FILTERING: Remove all large images to save memory
+            let filteredItems = loadedItems.filter { item in
+                // Keep all non-image items
+                guard case .image = item.type else { return true }
+
+                // Filter out large images
+                if let imageData = item.content as? Data {
+                    let sizeKB = imageData.count / 1024
+                    if sizeKB > 1024 { // Skip images > 1MB
+                        print("🗑️ Skipping large image (\(sizeKB)KB) during load")
+                        return false
+                    }
+                }
+                return true
+            }
+
+            print("🧹 Filtered \(loadedItems.count - filteredItems.count) large images")
+
+            // Apply hard limit - max 500 items
+            let maxItems = settingsManager.enableHistoryLimit
+                ? min(settingsManager.maxHistoryItems, 500)
+                : 500
+
+            clipboardItems = Array(filteredItems.prefix(maxItems))
+
+            let memoryEstimate = estimateMemoryUsage(clipboardItems)
+            print("✅ Loaded \(clipboardItems.count) items (~\(memoryEstimate)MB in memory)")
+
+            // If we cleaned up a lot or stripped legacy icon blobs, save the lighter version immediately
+            if containsLegacyIcons || loadedItems.count != clipboardItems.count {
+                print("💾 Saving cleaned history...")
+                saveClipboardHistory()
             }
         } catch {
             print("❌ Failed to load clipboard history: \(error.localizedDescription)")
@@ -407,7 +445,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
                 encoder.outputFormatting = .prettyPrinted
 
                 // Filter out items with large data (> 1MB per item) before saving
-                let itemsToSave = self.clipboardItems.prefix(1000).filter { item in
+                let itemsToSave = self.clipboardItems.prefix(500).filter { item in
                     // Skip very large images
                     if case .image = item.type,
                        let imageData = item.content as? Data,
@@ -443,7 +481,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             encoder.outputFormatting = .prettyPrinted
 
             // Filter out items with large data (> 1MB per item) before saving
-            let itemsToSave = clipboardItems.prefix(1000).filter { item in
+            let itemsToSave = clipboardItems.prefix(500).filter { item in
                 // Skip very large images
                 if case .image = item.type,
                    let imageData = item.content as? Data,
@@ -484,6 +522,27 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
         print("✅ Cleared clipboard history")
     }
+
+    private func estimateMemoryUsage(_ items: [ClipboardItem]) -> Int {
+        var totalBytes = 0
+        for item in items {
+            switch item.type {
+            case .image:
+                if let imageData = item.content as? Data {
+                    totalBytes += imageData.count
+                }
+            case .text, .code, .url, .email, .phone, .json, .color:
+                if let string = item.content as? String {
+                    totalBytes += string.utf8.count
+                }
+            case .file:
+                totalBytes += 1024 // Estimate for file path
+            }
+            // Add overhead for object structure (~2KB per item)
+            totalBytes += 2048
+        }
+        return totalBytes / 1024 / 1024 // Convert to MB
+    }
     
     func readClipboardItem(from pasteboard: NSPasteboard, sourceApp: NSRunningApplication?) -> ClipboardItem? {
         // Check for file URLs first (when copying files from Finder)
@@ -496,12 +555,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
         // Check for image
         if let image = NSImage(pasteboard: pasteboard) {
-            if let tiffData = image.tiffRepresentation {
-                // Compress image for storage
-                if let compressedData = compressImage(image) {
-                    return ClipboardItem(content: compressedData, type: .image, timestamp: Date(), sourceApplication: sourceApp)
+            // Try to compress image
+            if let compressedData = compressImage(image) {
+                // Check compressed size limit (1MB max)
+                if compressedData.count > 1_048_576 {
+                    print("⚠️ Skipping large image (\(compressedData.count / 1024)KB)")
+                    return nil
                 }
-                return ClipboardItem(content: tiffData, type: .image, timestamp: Date(), sourceApplication: sourceApp)
+                print("✅ Compressed image: \(compressedData.count / 1024)KB")
+                return ClipboardItem(content: compressedData, type: .image, timestamp: Date(), sourceApplication: sourceApp)
+            } else {
+                // ⚠️ Compression failed - DO NOT store uncompressed TIFF
+                print("❌ Failed to compress image - skipping")
+                return nil
             }
         }
 
@@ -520,10 +586,35 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     }
 
     private func compressImage(_ image: NSImage) -> Data? {
-        guard let tiff = image.tiffRepresentation,
-              let bitmap = NSBitmapImageRep(data: tiff) else { return nil }
+        guard let tiff = image.tiffRepresentation else {
+            print("❌ Failed to get TIFF representation")
+            return nil
+        }
 
-        return bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.7])
+        guard let bitmap = NSBitmapImageRep(data: tiff) else {
+            print("❌ Failed to create bitmap from TIFF")
+            return nil
+        }
+
+        // Try JPEG first (best compression)
+        if let jpegData = bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.7]) {
+            return jpegData
+        }
+
+        // Fallback to PNG for images with transparency (smaller than TIFF but larger than JPEG)
+        if let pngData = bitmap.representation(using: .png, properties: [:]) {
+            // Only use PNG if it's reasonable size
+            if pngData.count < 5_000_000 { // 5MB limit for PNG
+                print("⚠️ Using PNG fallback (\(pngData.count / 1024)KB)")
+                return pngData
+            } else {
+                print("❌ PNG too large (\(pngData.count / 1024)KB)")
+                return nil
+            }
+        }
+
+        print("❌ All compression methods failed")
+        return nil
     }
 
     private func detectContentType(from string: String) -> ClipboardItem.ItemType {
@@ -597,12 +688,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             if !self.clipboardItems.contains(where: { $0.isEqual(to: item) }) {
                 self.clipboardItems.insert(item, at: 0)
 
-                // Trim the list if history limit is enabled and exceeds the configured limit
-                if self.settingsManager.enableHistoryLimit {
-                    let maxItems = self.settingsManager.maxHistoryItems
-                    if self.clipboardItems.count > maxItems {
-                        self.clipboardItems = Array(self.clipboardItems.prefix(maxItems))
-                    }
+                // Enforce hard limit during runtime to prevent unbounded memory growth
+                let hardLimit = self.settingsManager.enableHistoryLimit
+                    ? min(self.settingsManager.maxHistoryItems, 500)
+                    : 500  // Default max of 500 items for memory efficiency
+
+                if self.clipboardItems.count > hardLimit {
+                    let removedCount = self.clipboardItems.count - hardLimit
+                    self.clipboardItems = Array(self.clipboardItems.prefix(hardLimit))
+                    print("⚠️ Trimmed \(removedCount) old items (limit: \(hardLimit))")
                 }
 
                 print("Added new clipboard item: \(item.displayString)")

@@ -13,15 +13,20 @@ struct ClipboardItem: Identifiable, Codable {
     let content: Any
     let type: ItemType
     let timestamp: Date
-    let sourceApplication: NSRunningApplication?
-    let sourceIcon: NSImage?
+    let sourceBundleIdentifier: String?
     
     init(content: Any, type: ItemType, timestamp: Date, sourceApplication: NSRunningApplication?) {
         self.content = content
         self.type = type
         self.timestamp = timestamp
-        self.sourceApplication = sourceApplication
-        self.sourceIcon = sourceApplication?.icon
+        self.sourceBundleIdentifier = sourceApplication?.bundleIdentifier
+    }
+
+    init(content: Any, type: ItemType, timestamp: Date, sourceBundleIdentifier: String?) {
+        self.content = content
+        self.type = type
+        self.timestamp = timestamp
+        self.sourceBundleIdentifier = sourceBundleIdentifier
     }
     
     enum ItemType: String, Codable {
@@ -85,6 +90,15 @@ struct ClipboardItem: Identifiable, Codable {
     var icon: String {
         return type.rawValue
     }
+
+    var sourceIcon: NSImage? {
+        SourceAppIconCache.shared.icon(for: sourceBundleIdentifier)
+    }
+
+    var sourceApplication: NSRunningApplication? {
+        guard let bundleId = sourceBundleIdentifier else { return nil }
+        return NSRunningApplication.runningApplications(withBundleIdentifier: bundleId).first
+    }
     
     func isEqual(to other: ClipboardItem) -> Bool {
         switch (self.type, other.type) {
@@ -112,7 +126,7 @@ struct ClipboardItem: Identifiable, Codable {
     }
     
     enum CodingKeys: String, CodingKey {
-        case id, content, type, timestamp, sourceApplication, sourceIcon
+        case id, content, type, timestamp, sourceBundleIdentifier, sourceApplication, sourceIcon
     }
     
     func encode(to encoder: Encoder) throws {
@@ -139,13 +153,8 @@ struct ClipboardItem: Identifiable, Codable {
             }
         }
         
-        // Encode source application info
-        try container.encode(sourceApplication?.bundleIdentifier, forKey: .sourceApplication)
-        
-        // Encode source icon
-        if let iconData = sourceIcon?.tiffRepresentation {
-            try container.encode(iconData, forKey: .sourceIcon)
-        }
+        // Only persist the lightweight bundle identifier. Icons are resolved lazily from cache.
+        try container.encodeIfPresent(sourceBundleIdentifier, forKey: .sourceBundleIdentifier)
     }
     
     init(from decoder: Decoder) throws {
@@ -172,19 +181,9 @@ struct ClipboardItem: Identifiable, Codable {
             }
         }
         
-        // Decode source application
-        if let bundleId = try container.decodeIfPresent(String.self, forKey: .sourceApplication) {
-            sourceApplication = NSRunningApplication.runningApplications(withBundleIdentifier: bundleId).first
-        } else {
-            sourceApplication = nil
-        }
-        
-        // Decode source icon
-        if let iconData = try container.decodeIfPresent(Data.self, forKey: .sourceIcon) {
-            sourceIcon = NSImage(data: iconData)
-        } else {
-            sourceIcon = nil
-        }
+        // Prefer new lightweight key; fall back to legacy field for backwards compatibility.
+        sourceBundleIdentifier = try container.decodeIfPresent(String.self, forKey: .sourceBundleIdentifier)
+            ?? container.decodeIfPresent(String.self, forKey: .sourceApplication)
     }
 }
 

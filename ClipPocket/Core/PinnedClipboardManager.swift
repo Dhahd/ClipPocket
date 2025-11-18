@@ -112,6 +112,8 @@ class PinnedClipboardManager: ObservableObject {
             print("No saved pinned items found")
             return
         }
+
+        let containsLegacyIcons = data.range(of: Data("\"sourceIcon\"".utf8)) != nil
         
         do {
             let decoder = JSONDecoder()
@@ -128,6 +130,12 @@ class PinnedClipboardManager: ObservableObject {
             }
             
             print("Loaded \(pinnedItems.count) pinned items")
+
+            // If we stripped legacy icon payloads, rewrite the payload to shrink memory footprint
+            if containsLegacyIcons {
+                savePinnedItems()
+                print("🧹 Rewrote pinned items without embedded icons")
+            }
         } catch {
             print("Failed to load pinned items: \(error.localizedDescription)")
             pinnedItems = []

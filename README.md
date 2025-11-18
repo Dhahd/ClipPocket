@@ -45,7 +45,6 @@ https://github.com/user-attachments/assets/c08e80d0-e0f9-43e2-95fe-f3828a96e040
 
 For issues, questions, or feedback:
 - Email: shaneendhahd@gmail.com
-- GitHub: https://github.com/Dhahd/ClipPocket
 
 ## Privacy
 

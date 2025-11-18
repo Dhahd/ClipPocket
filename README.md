@@ -6,7 +6,7 @@ Your Smart Clipboard Manager for macOS
 
 ClipPocket is a powerful yet simple clipboard manager that keeps track of everything you copy. Never lose important snippets again!
 
-<video src="https://github.com/Dhahd/ClipPocket/blob/main/demo.mp4" width="600" controls></video>
+<video src="https://raw.githubusercontent.com/Dhahd/ClipPocket/refs/heads/main/demo.mp4" width="600" controls></video>
 
 ## Features
 

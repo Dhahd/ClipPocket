@@ -207,8 +207,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         // If opened manually (from menu/shortcut), start auto-hide timer
         // and don't let edge monitor interfere
         if wasOpenedManually {
+            print("🎯 Window opened MANUALLY - using fixed 2s timer")
             startAutoHideTimer()
         } else {
+            print("🎯 Window opened via EDGE - using configurable settings (showDelay: \(settingsManager.autoShowDelay)s, hideDelay: \(settingsManager.autoHideDelay)s)")
             // Only let edge monitor handle hide if opened via edge
             mouseEdgeMonitor?.setWindowVisible(true)
         }
@@ -310,11 +312,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
         autoHideTimer = Timer.scheduledTimer(withTimeInterval: hideDelay, repeats: false) { [weak self] _ in
             guard let self = self else { return }
-            print("⏱️ Auto-hide timer fired - hiding clipboard manager")
+            print("⏱️ [MANUAL OPEN] Auto-hide timer fired after 2.0s - hiding clipboard manager")
             self.hideClipboardManager()
         }
 
-        print("⏱️ Auto-hide timer started (2.0s)")
+        print("⏱️ [MANUAL OPEN] Auto-hide timer started with FIXED 2.0s delay")
     }
 
     private func cancelAutoHideTimer() {

@@ -138,13 +138,13 @@ struct SettingsView: View {
                                                     appDelegate.updateAutoHideDelay(newValue)
                                                 }
                                             ),
-                                            in: 0.0...2.0,
+                                            in: 0.1...2.0,
                                             step: 0.1
                                         )
                                         .controlSize(.small)
 
                                         HStack {
-                                            Text("Instant")
+                                            Text("0.1s")
                                                 .font(.system(size: 10))
                                                 .foregroundColor(.secondary)
                                             Spacer()

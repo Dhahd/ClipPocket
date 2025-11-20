@@ -79,6 +79,12 @@ class PinnedClipboardManager: ObservableObject {
         savePinnedItems()
         print("Reordered pinned items")
     }
+
+    func replaceAll(with items: [PinnedClipboardItem]) {
+        pinnedItems = Array(items.prefix(maxPinnedItems))
+        savePinnedItems()
+        print("Replaced pinned items from import")
+    }
     
     func clearAllPinnedItems() {
         pinnedItems.removeAll()

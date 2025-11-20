@@ -24,6 +24,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     @Published var showOnboarding = false
     private var onboardingWindow: NSWindow?
     private var lastFocusedApp: NSRunningApplication?
+    private var mouseEdgeMonitor: MouseEdgeMonitor?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -49,6 +50,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
             UpdateChecker.shared.checkForUpdatesOnLaunch()
         }
+
+        // Setup mouse edge monitoring if enabled
+        setupMouseEdgeMonitoring()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -196,6 +200,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         }
 
         isClipboardManagerVisible = true
+        mouseEdgeMonitor?.setWindowVisible(true)
         print("Clipboard manager shown")
     }
 
@@ -225,9 +230,47 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         }
 
         isClipboardManagerVisible = false
+        mouseEdgeMonitor?.setWindowVisible(false)
         print("Clipboard manager hidden")
     }
-    
+
+    // MARK: - Mouse Edge Monitoring
+    private func setupMouseEdgeMonitoring() {
+        mouseEdgeMonitor = MouseEdgeMonitor()
+
+        mouseEdgeMonitor?.onEdgeEntered = { [weak self] in
+            guard let self = self else { return }
+            if self.settingsManager.autoShowOnEdge && !self.isClipboardManagerVisible {
+                DispatchQueue.main.async {
+                    self.showClipboardManager()
+                }
+            }
+        }
+
+        mouseEdgeMonitor?.onEdgeExited = { [weak self] in
+            guard let self = self else { return }
+            if self.settingsManager.autoShowOnEdge && self.isClipboardManagerVisible {
+                DispatchQueue.main.async {
+                    self.hideClipboardManager()
+                }
+            }
+        }
+
+        if settingsManager.autoShowOnEdge {
+            mouseEdgeMonitor?.startMonitoring()
+        }
+    }
+
+    func startMouseEdgeMonitoring() {
+        mouseEdgeMonitor?.startMonitoring()
+        print("🖱️ Auto show/hide on edge enabled")
+    }
+
+    func stopMouseEdgeMonitoring() {
+        mouseEdgeMonitor?.stopMonitoring()
+        print("🖱️ Auto show/hide on edge disabled")
+    }
+
     func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         

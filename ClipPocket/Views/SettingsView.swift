@@ -61,6 +61,22 @@ struct SettingsView: View {
                                 description: "Immediately paste the copied item after selection",
                                 toggle: $settingsManager.autoPasteEnabled
                             )
+
+                            SettingRow(
+                                title: "Auto Show on Edge",
+                                description: "Show ClipPocket when mouse moves to bottom of screen",
+                                toggle: Binding(
+                                    get: { settingsManager.autoShowOnEdge },
+                                    set: { newValue in
+                                        settingsManager.autoShowOnEdge = newValue
+                                        if newValue {
+                                            appDelegate.startMouseEdgeMonitoring()
+                                        } else {
+                                            appDelegate.stopMouseEdgeMonitoring()
+                                        }
+                                    }
+                                )
+                            )
                         }
                     }
 
@@ -322,9 +338,14 @@ struct SettingsView: View {
         savePanel.begin { response in
             if response == .OK, let url = savePanel.url {
                 do {
-                    let encoder = JSONEncoder()
-                    encoder.outputFormatting = .prettyPrinted
-                    let data = try encoder.encode(Array(appDelegate.clipboardItems))
+                    let data = try ClipboardBackupManager.shared.exportBackup(
+                        history: appDelegate.clipboardItems,
+                        pinned: appDelegate.pinnedManager.pinnedItems,
+                        maxHistory: appDelegate.settingsManager.enableHistoryLimit
+                            ? min(appDelegate.settingsManager.maxHistoryItems, 500)
+                            : 500,
+                        maxPinned: 50
+                    )
                     try data.write(to: url)
                 } catch {
                     print("Export failed: \(error)")
@@ -342,9 +363,17 @@ struct SettingsView: View {
             if response == .OK, let url = openPanel.url {
                 do {
                     let data = try Data(contentsOf: url)
-                    let decoder = JSONDecoder()
-                    let items = try decoder.decode([ClipboardItem].self, from: data)
-                    appDelegate.clipboardItems = items
+                    let imported = try ClipboardBackupManager.shared.importBackup(
+                        from: data,
+                        maxHistory: appDelegate.settingsManager.enableHistoryLimit
+                            ? min(appDelegate.settingsManager.maxHistoryItems, 500)
+                            : 500,
+                        maxPinned: 50
+                    )
+                    appDelegate.clipboardItems = imported.history
+                    if !imported.pinned.isEmpty {
+                        appDelegate.pinnedManager.replaceAll(with: imported.pinned)
+                    }
                     appDelegate.saveClipboardHistory()
                 } catch {
                     print("Import failed: \(error)")

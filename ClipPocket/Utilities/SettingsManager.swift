@@ -15,6 +15,7 @@ class SettingsManager: ObservableObject {
         static let autoPasteEnabled = "autoPasteEnabled"
         static let maxHistoryItems = "maxHistoryItems"
         static let enableHistoryLimit = "enableHistoryLimit"
+        static let autoShowOnEdge = "autoShowOnEdge"
     }
     
     @Published var launchAtLogin: Bool {
@@ -56,6 +57,12 @@ class SettingsManager: ObservableObject {
     @Published var enableHistoryLimit: Bool {
         didSet {
             defaults.set(enableHistoryLimit, forKey: Keys.enableHistoryLimit)
+        }
+    }
+
+    @Published var autoShowOnEdge: Bool {
+        didSet {
+            defaults.set(autoShowOnEdge, forKey: Keys.autoShowOnEdge)
         }
     }
 
@@ -114,6 +121,12 @@ class SettingsManager: ObservableObject {
             defaults.set(false, forKey: Keys.enableHistoryLimit)
         }
         self.enableHistoryLimit = defaults.bool(forKey: Keys.enableHistoryLimit)
+
+        // Set default for autoShowOnEdge if not set
+        if defaults.object(forKey: Keys.autoShowOnEdge) == nil {
+            defaults.set(false, forKey: Keys.autoShowOnEdge)
+        }
+        self.autoShowOnEdge = defaults.bool(forKey: Keys.autoShowOnEdge)
     }
 
     private func persistKeyboardShortcut() {
@@ -131,5 +144,6 @@ class SettingsManager: ObservableObject {
         autoPasteEnabled = false
         maxHistoryItems = 100
         enableHistoryLimit = false
+        autoShowOnEdge = false
     }
 }

@@ -25,6 +25,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     private var onboardingWindow: NSWindow?
     private var lastFocusedApp: NSRunningApplication?
     private var mouseEdgeMonitor: MouseEdgeMonitor?
+    private var autoHideTimer: Timer?
+    private var wasOpenedManually = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -146,6 +148,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         } else {
             // Remember where the user was so we can return focus for auto-paste
             lastFocusedApp = NSWorkspace.shared.frontmostApplication
+            wasOpenedManually = true
             showClipboardManager()
         }
     }
@@ -200,7 +203,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         }
 
         isClipboardManagerVisible = true
-        mouseEdgeMonitor?.setWindowVisible(true)
+
+        // If opened manually (from menu/shortcut), start auto-hide timer
+        // and don't let edge monitor interfere
+        if wasOpenedManually {
+            startAutoHideTimer()
+        } else {
+            // Only let edge monitor handle hide if opened via edge
+            mouseEdgeMonitor?.setWindowVisible(true)
+        }
+
         print("Clipboard manager shown")
     }
 
@@ -231,6 +243,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
         isClipboardManagerVisible = false
         mouseEdgeMonitor?.setWindowVisible(false)
+        cancelAutoHideTimer()
+        wasOpenedManually = false
         print("Clipboard manager hidden")
     }
 
@@ -283,6 +297,29 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     func stopMouseEdgeMonitoring() {
         mouseEdgeMonitor?.stopMonitoring()
         print("🖱️ Auto show/hide on edge disabled")
+    }
+
+    // MARK: - Auto-Hide Timer for Manual Opens
+    private func startAutoHideTimer() {
+        // Cancel any existing timer
+        cancelAutoHideTimer()
+
+        // Fixed 2 seconds for manual opens (menu/shortcut)
+        // This gives enough time to move mouse from menu to bottom of screen
+        let hideDelay: TimeInterval = 2.0
+
+        autoHideTimer = Timer.scheduledTimer(withTimeInterval: hideDelay, repeats: false) { [weak self] _ in
+            guard let self = self else { return }
+            print("⏱️ Auto-hide timer fired - hiding clipboard manager")
+            self.hideClipboardManager()
+        }
+
+        print("⏱️ Auto-hide timer started (2.0s)")
+    }
+
+    private func cancelAutoHideTimer() {
+        autoHideTimer?.invalidate()
+        autoHideTimer = nil
     }
 
     func setupStatusItem() {

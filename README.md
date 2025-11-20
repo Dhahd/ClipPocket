@@ -18,6 +18,9 @@ https://github.com/user-attachments/assets/c08e80d0-e0f9-43e2-95fe-f3828a96e040
 - **Quick Search** - Find anything instantly with powerful search
 - **Privacy First** - All data stays local on your Mac
 - **Keyboard Shortcuts** - Access with ⌘⇧V (Cmd+Shift+V)
+- **Auto Show on Edge** - Move mouse to bottom of screen to show ClipPocket
+- **Configurable Delays** - Customize show/hide timing (0-2s) for edge triggers
+- **Auto-Paste** - Optionally paste items immediately after selection
 - **Auto Updates** - Automatic update checking with one-click installation
 
 ## Installation

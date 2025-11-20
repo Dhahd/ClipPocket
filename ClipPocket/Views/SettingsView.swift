@@ -77,6 +77,87 @@ struct SettingsView: View {
                                     }
                                 )
                             )
+
+                            if settingsManager.autoShowOnEdge {
+                                VStack(alignment: .leading, spacing: 12) {
+                                    // Show Delay
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        HStack {
+                                            Text("Show Delay")
+                                                .font(.system(size: 12))
+                                                .foregroundColor(.secondary)
+                                            Spacer()
+                                            Text(String(format: "%.1fs", settingsManager.autoShowDelay))
+                                                .font(.system(size: 12, weight: .medium))
+                                                .foregroundColor(.primary)
+                                        }
+
+                                        Slider(
+                                            value: Binding(
+                                                get: { settingsManager.autoShowDelay },
+                                                set: { newValue in
+                                                    settingsManager.autoShowDelay = newValue
+                                                    appDelegate.updateAutoShowDelay(newValue)
+                                                }
+                                            ),
+                                            in: 0.0...2.0,
+                                            step: 0.1
+                                        )
+                                        .controlSize(.small)
+
+                                        HStack {
+                                            Text("Instant")
+                                                .font(.system(size: 10))
+                                                .foregroundColor(.secondary)
+                                            Spacer()
+                                            Text("2s")
+                                                .font(.system(size: 10))
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+
+                                    Divider()
+
+                                    // Hide Delay
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        HStack {
+                                            Text("Hide Delay")
+                                                .font(.system(size: 12))
+                                                .foregroundColor(.secondary)
+                                            Spacer()
+                                            Text(String(format: "%.1fs", settingsManager.autoHideDelay))
+                                                .font(.system(size: 12, weight: .medium))
+                                                .foregroundColor(.primary)
+                                        }
+
+                                        Slider(
+                                            value: Binding(
+                                                get: { settingsManager.autoHideDelay },
+                                                set: { newValue in
+                                                    settingsManager.autoHideDelay = newValue
+                                                    appDelegate.updateAutoHideDelay(newValue)
+                                                }
+                                            ),
+                                            in: 0.0...2.0,
+                                            step: 0.1
+                                        )
+                                        .controlSize(.small)
+
+                                        HStack {
+                                            Text("Instant")
+                                                .font(.system(size: 10))
+                                                .foregroundColor(.secondary)
+                                            Spacer()
+                                            Text("2s")
+                                                .font(.system(size: 10))
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                }
+                                .padding(16)
+                                .background(Color(NSColor.controlBackgroundColor).opacity(0.3))
+                                .cornerRadius(8)
+                            }
                         }
                     }
 

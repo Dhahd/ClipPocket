@@ -16,6 +16,8 @@ class SettingsManager: ObservableObject {
         static let maxHistoryItems = "maxHistoryItems"
         static let enableHistoryLimit = "enableHistoryLimit"
         static let autoShowOnEdge = "autoShowOnEdge"
+        static let autoShowDelay = "autoShowDelay"
+        static let autoHideDelay = "autoHideDelay"
     }
     
     @Published var launchAtLogin: Bool {
@@ -63,6 +65,18 @@ class SettingsManager: ObservableObject {
     @Published var autoShowOnEdge: Bool {
         didSet {
             defaults.set(autoShowOnEdge, forKey: Keys.autoShowOnEdge)
+        }
+    }
+
+    @Published var autoShowDelay: Double {
+        didSet {
+            defaults.set(autoShowDelay, forKey: Keys.autoShowDelay)
+        }
+    }
+
+    @Published var autoHideDelay: Double {
+        didSet {
+            defaults.set(autoHideDelay, forKey: Keys.autoHideDelay)
         }
     }
 
@@ -127,6 +141,18 @@ class SettingsManager: ObservableObject {
             defaults.set(false, forKey: Keys.autoShowOnEdge)
         }
         self.autoShowOnEdge = defaults.bool(forKey: Keys.autoShowOnEdge)
+
+        // Set default for autoShowDelay if not set (0.3 seconds default)
+        if defaults.object(forKey: Keys.autoShowDelay) == nil {
+            defaults.set(0.3, forKey: Keys.autoShowDelay)
+        }
+        self.autoShowDelay = defaults.double(forKey: Keys.autoShowDelay)
+
+        // Set default for autoHideDelay if not set (0.5 seconds default)
+        if defaults.object(forKey: Keys.autoHideDelay) == nil {
+            defaults.set(0.5, forKey: Keys.autoHideDelay)
+        }
+        self.autoHideDelay = defaults.double(forKey: Keys.autoHideDelay)
     }
 
     private func persistKeyboardShortcut() {
@@ -145,5 +171,7 @@ class SettingsManager: ObservableObject {
         maxHistoryItems = 100
         enableHistoryLimit = false
         autoShowOnEdge = false
+        autoShowDelay = 0.3
+        autoHideDelay = 0.5
     }
 }

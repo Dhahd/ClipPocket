@@ -237,6 +237,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     // MARK: - Mouse Edge Monitoring
     private func setupMouseEdgeMonitoring() {
         mouseEdgeMonitor = MouseEdgeMonitor()
+        mouseEdgeMonitor?.showDelay = settingsManager.autoShowDelay
+        mouseEdgeMonitor?.hideDelay = settingsManager.autoHideDelay
 
         mouseEdgeMonitor?.onEdgeEntered = { [weak self] in
             guard let self = self else { return }
@@ -262,8 +264,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     }
 
     func startMouseEdgeMonitoring() {
+        mouseEdgeMonitor?.showDelay = settingsManager.autoShowDelay
+        mouseEdgeMonitor?.hideDelay = settingsManager.autoHideDelay
         mouseEdgeMonitor?.startMonitoring()
         print("🖱️ Auto show/hide on edge enabled")
+    }
+
+    func updateAutoShowDelay(_ delay: Double) {
+        mouseEdgeMonitor?.showDelay = delay
+        print("🖱️ Auto show delay updated to \(delay)s")
+    }
+
+    func updateAutoHideDelay(_ delay: Double) {
+        mouseEdgeMonitor?.hideDelay = delay
+        print("🖱️ Auto hide delay updated to \(delay)s")
     }
 
     func stopMouseEdgeMonitoring() {

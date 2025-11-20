@@ -11,9 +11,12 @@ import Foundation
 class MouseEdgeMonitor {
     private var pollTimer: Timer?
     private var hideTimer: Timer?
+    private var showTimer: Timer?
     private let edgeThreshold: CGFloat = 10.0  // Pixels from edge to trigger (accounts for Dock)
-    private let hideDelay: TimeInterval = 0.5  // Delay before hiding when mouse leaves
     private let pollInterval: TimeInterval = 0.05  // Check mouse position 20 times per second
+
+    var showDelay: TimeInterval = 0.3  // Configurable delay before showing (default 0.3s)
+    var hideDelay: TimeInterval = 0.5  // Configurable delay before hiding (default 0.5s)
 
     var onEdgeEntered: (() -> Void)?
     var onEdgeExited: (() -> Void)?
@@ -37,6 +40,8 @@ class MouseEdgeMonitor {
         pollTimer = nil
         hideTimer?.invalidate()
         hideTimer = nil
+        showTimer?.invalidate()
+        showTimer = nil
         isNearEdge = false
         print("🖱️ Mouse edge monitoring stopped")
     }
@@ -44,10 +49,12 @@ class MouseEdgeMonitor {
     func setWindowVisible(_ visible: Bool) {
         isWindowVisible = visible
 
-        // If window just became visible, cancel any pending hide
+        // If window just became visible, cancel any pending hide/show
         if visible {
             hideTimer?.invalidate()
             hideTimer = nil
+            showTimer?.invalidate()
+            showTimer = nil
         }
     }
 
@@ -63,18 +70,20 @@ class MouseEdgeMonitor {
         let atBottomEdge = distanceFromBottom <= edgeThreshold
 
         if atBottomEdge && !isNearEdge {
-            // Mouse hit the bottom edge - show immediately
+            // Mouse hit the bottom edge - schedule show with delay
             isNearEdge = true
             hideTimer?.invalidate()
             hideTimer = nil
 
-            if !isWindowVisible {
-                print("🖱️ Mouse at bottom edge (y=\(mouseLocation.y)) - showing window")
-                onEdgeEntered?()
+            if !isWindowVisible && showTimer == nil {
+                print("🖱️ Mouse at bottom edge (y=\(mouseLocation.y)) - scheduling show in \(showDelay)s")
+                scheduleShow()
             }
         } else if !atBottomEdge && isNearEdge {
-            // Mouse left the bottom edge
+            // Mouse left the bottom edge - cancel pending show
             isNearEdge = false
+            showTimer?.invalidate()
+            showTimer = nil
 
             // Only schedule hide if the window is visible and mouse is not over it
             if isWindowVisible && !isMouseOverWindow() {
@@ -89,6 +98,22 @@ class MouseEdgeMonitor {
             // Mouse is over the window - cancel any pending hide
             hideTimer?.invalidate()
             hideTimer = nil
+        }
+    }
+
+    private func scheduleShow() {
+        // Don't schedule if already scheduled
+        guard showTimer == nil else { return }
+
+        showTimer = Timer.scheduledTimer(withTimeInterval: showDelay, repeats: false) { [weak self] _ in
+            guard let self = self else { return }
+
+            // Final check: show only if still at edge and window not visible
+            if self.isNearEdge && !self.isWindowVisible {
+                print("🖱️ Delay complete - showing window")
+                self.onEdgeEntered?()
+            }
+            self.showTimer = nil
         }
     }
 

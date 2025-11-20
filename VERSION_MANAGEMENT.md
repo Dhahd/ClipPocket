@@ -77,5 +77,5 @@ sed -i '' 's/MARKETING_VERSION = 2.0.0;/MARKETING_VERSION = 3.0.0;/g' ClipPocket
 
 ## Current Version
 
-**Version:** 2.1.1
-**Build:** 5
+**Version:** 2.5.0
+**Build:** 6

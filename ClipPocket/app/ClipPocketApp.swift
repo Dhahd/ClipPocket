@@ -312,8 +312,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
         autoHideTimer = Timer.scheduledTimer(withTimeInterval: hideDelay, repeats: false) { [weak self] _ in
             guard let self = self else { return }
-            print("⏱️ [MANUAL OPEN] Auto-hide timer fired after 2.0s - hiding clipboard manager")
-            self.hideClipboardManager()
+
+            // Only hide if mouse is NOT over the window
+            if !self.isMouseOverWindow() {
+                print("⏱️ [MANUAL OPEN] Auto-hide timer fired after 2.0s - hiding clipboard manager")
+                self.hideClipboardManager()
+            } else {
+                print("⏱️ [MANUAL OPEN] Auto-hide timer fired but mouse is over window - keeping visible")
+            }
         }
 
         print("⏱️ [MANUAL OPEN] Auto-hide timer started with FIXED 2.0s delay")
@@ -322,6 +328,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     private func cancelAutoHideTimer() {
         autoHideTimer?.invalidate()
         autoHideTimer = nil
+    }
+
+    private func isMouseOverWindow() -> Bool {
+        let mouseLocation = NSEvent.mouseLocation
+
+        // Check if mouse is over any visible ClipPocket window
+        for window in NSApp.windows {
+            if window.isVisible {
+                // Expand the window frame slightly to include a small buffer zone
+                let expandedFrame = window.frame.insetBy(dx: -10, dy: -10)
+                if expandedFrame.contains(mouseLocation) {
+                    return true
+                }
+            }
+        }
+
+        return false
     }
 
     func setupStatusItem() {

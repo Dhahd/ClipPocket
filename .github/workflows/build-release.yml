@@ -1,0 +1,55 @@
+name: Build and Release ClipPocket
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Build Universal Binary (Intel + Apple Silicon)
+        run: |
+          xcodebuild clean build \
+            -project ClipPocket.xcodeproj \
+            -scheme ClipPocket \
+            -configuration Release \
+            -derivedDataPath build \
+            ARCHS="x86_64 arm64" \
+            ONLY_ACTIVE_ARCH=NO \
+            MACOSX_DEPLOYMENT_TARGET=13.0
+
+      - name: Verify Universal Binary
+        run: |
+          echo "Checking architectures..."
+          lipo -info "build/Build/Products/Release/ClipPocket.app/Contents/MacOS/ClipPocket"
+
+      - name: Create DMG
+        run: |
+          brew install create-dmg
+          create-dmg \
+            --volname "ClipPocket" \
+            --window-pos 200 120 \
+            --window-size 800 400 \
+            --icon-size 100 \
+            --icon "ClipPocket.app" 200 190 \
+            --hide-extension "ClipPocket.app" \
+            --app-drop-link 600 185 \
+            "ClipPocket.dmg" \
+            "build/Build/Products/Release/ClipPocket.app"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ClipPocket.dmg
+          generate_release_notes: true

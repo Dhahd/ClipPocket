@@ -13,6 +13,7 @@ struct DraggableClipboardItemCard: View {
     let item: ClipboardItem
     @EnvironmentObject var dragDropManager: DragDropManager
     @EnvironmentObject var appDelegate: AppDelegate
+    @ObservedObject private var settings = SettingsManager.shared
     var isBeingDragged = false
     
     var body: some View {
@@ -25,6 +26,11 @@ struct DraggableClipboardItemCard: View {
                 case .text, .code, .color, .url, .email, .phone, .json:
                     if let stringContent = item.content as? String {
                         provider.registerObject(stringContent as NSString, visibility: .all)
+                    }
+                case .richText:
+                    if let info = item.content as? [String: Any],
+                       let plainText = info["plainText"] as? String {
+                        provider.registerObject(plainText as NSString, visibility: .all)
                     }
                 case .image:
                     if let imageData = item.content as? Data,
@@ -40,7 +46,7 @@ struct DraggableClipboardItemCard: View {
                 return provider
             } preview: {
                 ClipboardItemCard(item: item)
-                    .frame(width: 240, height: 180)
+                    .frame(width: settings.cardWidth, height: settings.cardHeight)
             }
     }
 }

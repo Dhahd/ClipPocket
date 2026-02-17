@@ -12,10 +12,10 @@ import AppKit
 
 struct ClipboardItemCard: View {
     @EnvironmentObject var appDelegate: AppDelegate
+    @ObservedObject private var settings = SettingsManager.shared
 
     let item: ClipboardItem
     @State private var headerColor: Color = .blue
-    @State private var isHovered: Bool = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -32,13 +32,13 @@ struct ClipboardItemCard: View {
                 Spacer()
                 VStack(alignment: .trailing, spacing: 4) {
                     Text(item.typeDisplayName)
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.system(size: settings.scaledFont(14), weight: .bold))
                     Text(item.timestamp, style: .relative)
-                        .font(.system(size: 12, weight: .thin))
+                        .font(.system(size: settings.scaledFont(12), weight: .thin))
                 }
                 .padding(.trailing, 12)
             }
-            .frame(height: 48)
+            .frame(height: settings.cardHeaderHeight)
             .foregroundColor(.white)
             .background(
                 ZStack {
@@ -61,7 +61,7 @@ struct ClipboardItemCard: View {
             contentView
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .frame(width: 240, height: 180)
+        .frame(width: settings.cardWidth, height: settings.cardHeight)
         .background(
             ZStack {
                 if let cardColor = colorFromItem() {
@@ -82,14 +82,14 @@ struct ClipboardItemCard: View {
                 )
             }
         )
-        .cornerRadius(12)
+        .cornerRadius(settings.cardCornerRadius)
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: settings.cardCornerRadius)
                 .stroke(
                     LinearGradient(
                         colors: [
-                            Color.white.opacity(0.2),
-                            Color.white.opacity(0.1)
+                            Color.primary.opacity(0.15),
+                            Color.primary.opacity(0.08)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -98,11 +98,6 @@ struct ClipboardItemCard: View {
                 )
         )
         .shadow(color: Color.black.opacity(0.3), radius: 8, x: 0, y: 4)
-        .scaleEffect(isHovered ? 1.05 : 1.0)
-        .animation(.easeInOut(duration: 0.2), value: isHovered)
-        .onHover { hovering in
-            isHovered = hovering
-        }
         .onAppear {
             if item.type == .color, let cardColor = colorFromItem() {
                 headerColor = cardColor
@@ -138,19 +133,19 @@ struct ClipboardItemCard: View {
         switch item.type {
         case .text:
             Text(item.displayString)
-                .font(.system(size: 14))
-                .foregroundColor(Color(red: 0.8, green: 0.8, blue: 0.8))
+                .font(.system(size: settings.scaledFont(14)))
+                .foregroundColor(.primary)
                 .padding(12)
         case .code:
             codeView
         case .url:
             VStack(alignment: .leading, spacing: 8) {
                 Image(systemName: "link")
-                    .font(.system(size: 32))
+                    .font(.system(size: settings.scaledFont(32)))
                     .foregroundColor(.blue)
                 Text(item.displayString)
-                    .font(.system(size: 12))
-                    .foregroundColor(.white)
+                    .font(.system(size: settings.scaledFont(12)))
+                    .foregroundColor(.primary)
                     .lineLimit(4)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -158,30 +153,30 @@ struct ClipboardItemCard: View {
         case .email:
             VStack(alignment: .leading, spacing: 8) {
                 Image(systemName: "envelope.fill")
-                    .font(.system(size: 32))
+                    .font(.system(size: settings.scaledFont(32)))
                     .foregroundColor(.cyan)
                 Text(item.displayString)
-                    .font(.system(size: 14))
-                    .foregroundColor(.white)
+                    .font(.system(size: settings.scaledFont(14)))
+                    .foregroundColor(.primary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .padding(12)
         case .phone:
             VStack(alignment: .leading, spacing: 8) {
                 Image(systemName: "phone.fill")
-                    .font(.system(size: 32))
+                    .font(.system(size: settings.scaledFont(32)))
                     .foregroundColor(.green)
                 Text(item.displayString)
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(.white)
+                    .font(.system(size: settings.scaledFont(16), weight: .medium))
+                    .foregroundColor(.primary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .padding(12)
         case .json:
             ScrollView {
                 Text(item.displayString)
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(Color(red: 0.8, green: 0.8, blue: 0.8))
+                    .font(.system(size: settings.scaledFont(11), design: .monospaced))
+                    .foregroundColor(.primary)
                     .padding(12)
             }
         case .image:
@@ -203,7 +198,7 @@ struct ClipboardItemCard: View {
                 ZStack {
                     color
                     Text(colorString)
-                        .font(.system(size: 20, weight: .bold))
+                        .font(.system(size: settings.scaledFont(20), weight: .bold))
                         .foregroundColor(color.contrastingTextColor(colorString))
                 }
             }
@@ -225,28 +220,32 @@ struct ClipboardItemCard: View {
 
                 // File name
                 Text(item.displayString)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.white)
+                    .font(.system(size: settings.scaledFont(13), weight: .medium))
+                    .foregroundColor(.primary)
                     .lineLimit(2)
 
                 // File path
                 if let url = item.content as? URL {
                     Text(url.path)
-                        .font(.system(size: 10))
-                        .foregroundColor(.white.opacity(0.6))
+                        .font(.system(size: settings.scaledFont(10)))
+                        .foregroundColor(.secondary)
                         .lineLimit(2)
 
                     // File info
                     if let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
                        let fileSize = attributes[.size] as? Int64 {
                         Text(formatFileSize(fileSize))
-                            .font(.system(size: 10))
-                            .foregroundColor(.white.opacity(0.5))
+                            .font(.system(size: settings.scaledFont(10)))
+                            .foregroundColor(.secondary)
                     }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .padding(12)
+        case .richText:
+            RichTextPreviewView(richTextInfo: item.content as? [String: Any])
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .padding(12)
         }
     }
 
@@ -289,6 +288,60 @@ struct ClipboardItemCard: View {
 }
 
 
+struct RichTextPreviewView: View {
+    let richTextInfo: [String: Any]?
+
+    var body: some View {
+        if let info = richTextInfo,
+           let rtfData = info["rtfData"] as? Data {
+            RichTextNSViewRepresentable(rtfData: rtfData)
+        } else if let info = richTextInfo,
+                  let plainText = info["plainText"] as? String {
+            Text(plainText)
+                .font(.system(size: SettingsManager.shared.scaledFont(12)))
+                .foregroundColor(.primary)
+                .lineLimit(6)
+        } else {
+            Text("Rich Text")
+                .foregroundColor(.gray)
+        }
+    }
+}
+
+struct RichTextNSViewRepresentable: NSViewRepresentable {
+    let rtfData: Data
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSScrollView()
+        let textView = NSTextView()
+        textView.isEditable = false
+        textView.isSelectable = false
+        textView.backgroundColor = .clear
+        textView.drawsBackground = false
+
+        if let attrStr = NSAttributedString(rtf: rtfData, documentAttributes: nil) {
+            let mutable = NSMutableAttributedString(attributedString: attrStr)
+            // Scale font for preview
+            let fullRange = NSRange(location: 0, length: mutable.length)
+            mutable.enumerateAttribute(.font, in: fullRange) { value, range, _ in
+                if let font = value as? NSFont {
+                    let newFont = NSFont(descriptor: font.fontDescriptor, size: min(font.pointSize, 11)) ?? NSFont.systemFont(ofSize: 11)
+                    mutable.addAttribute(.font, value: newFont, range: range)
+                }
+            }
+            textView.textStorage?.setAttributedString(mutable)
+        }
+
+        scrollView.documentView = textView
+        scrollView.hasVerticalScroller = false
+        scrollView.hasHorizontalScroller = false
+        scrollView.drawsBackground = false
+        return scrollView
+    }
+
+    func updateNSView(_ nsView: NSScrollView, context: Context) {}
+}
+
 class ClipboardItemWrapper: NSObject, NSItemProviderWriting, NSItemProviderReading {
     static var writableTypeIdentifiersForItemProvider: [String] {
             return [UTType.utf8PlainText.identifier, UTType.image.identifier]
@@ -312,6 +365,15 @@ class ClipboardItemWrapper: NSObject, NSItemProviderWriting, NSItemProviderReadi
             if typeIdentifier == UTType.utf8PlainText.identifier,
                let stringContent = item.content as? String,
                let data = stringContent.data(using: .utf8) {
+                completionHandler(data, nil)
+            } else {
+                completionHandler(nil, NSError(domain: "ClipboardItemError", code: -1, userInfo: nil))
+            }
+        case .richText:
+            if typeIdentifier == UTType.utf8PlainText.identifier,
+               let info = item.content as? [String: Any],
+               let plainText = info["plainText"] as? String,
+               let data = plainText.data(using: .utf8) {
                 completionHandler(data, nil)
             } else {
                 completionHandler(nil, NSError(domain: "ClipboardItemError", code: -1, userInfo: nil))

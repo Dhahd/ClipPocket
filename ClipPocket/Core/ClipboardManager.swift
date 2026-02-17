@@ -20,6 +20,18 @@ class ClipboardManager: ObservableObject {
             if let content = item.content as? String {
                 pasteboard.setString(content, forType: .string)
             }
+        case .richText:
+            if let info = item.content as? [String: Any] {
+                if let rtfData = info["rtfData"] as? Data {
+                    pasteboard.setData(rtfData, forType: .rtf)
+                }
+                if let htmlData = info["htmlData"] as? Data {
+                    pasteboard.setData(htmlData, forType: .html)
+                }
+                if let plainText = info["plainText"] as? String {
+                    pasteboard.setString(plainText, forType: .string)
+                }
+            }
         case .image:
             if let imageData = item.content as? Data,
                let image = NSImage(data: imageData) {

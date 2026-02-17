@@ -46,6 +46,20 @@ class MouseEdgeMonitor {
         print("🖱️ Mouse edge monitoring stopped")
     }
 
+    func resetHideTimer() {
+        hideTimer?.invalidate()
+        hideTimer = nil
+        // Reschedule hide from the beginning
+        if isWindowVisible && !isNearEdge {
+            scheduleHide()
+        }
+    }
+
+    func pauseHideTimer() {
+        hideTimer?.invalidate()
+        hideTimer = nil
+    }
+
     func setWindowVisible(_ visible: Bool) {
         isWindowVisible = visible
 
@@ -59,7 +73,7 @@ class MouseEdgeMonitor {
     }
 
     private func checkMousePosition() {
-        guard let screen = NSScreen.main else { return }
+        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(NSEvent.mouseLocation) }) ?? NSScreen.main else { return }
 
         let mouseLocation = NSEvent.mouseLocation
         let screenFrame = screen.frame  // Use full frame, not visibleFrame

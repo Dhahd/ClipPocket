@@ -39,6 +39,8 @@ class QuickActions {
             return ("clipboard-\(dateString).txt", [.plainText, .utf8PlainText])
         case .color:
             return ("clipboard-\(dateString).txt", [.plainText, .utf8PlainText])
+        case .richText:
+            return ("clipboard-\(dateString).rtf", [.rtf, .plainText])
         case .file:
             if let fileURL = item.content as? URL {
                 let utType = UTType(filenameExtension: fileURL.pathExtension) ?? .data
@@ -56,6 +58,14 @@ class QuickActions {
                     try text.write(to: url, atomically: true, encoding: .utf8)
                 } else {
                     throw NSError(domain: "ClipPocket", code: 1, userInfo: [NSLocalizedDescriptionKey: "No text content to export."])
+                }
+            case .richText:
+                if let info = item.content as? [String: Any] {
+                    if let rtfData = info["rtfData"] as? Data {
+                        try rtfData.write(to: url)
+                    } else if let plainText = info["plainText"] as? String {
+                        try plainText.write(to: url, atomically: true, encoding: .utf8)
+                    }
                 }
             case .image:
                 if let imageData = item.content as? Data {
@@ -175,6 +185,11 @@ class QuickActions {
         case .text, .code, .url, .email, .phone, .json, .color:
             if let text = item.content as? String {
                 itemsToShare.append(text)
+            }
+        case .richText:
+            if let info = item.content as? [String: Any],
+               let plainText = info["plainText"] as? String {
+                itemsToShare.append(plainText)
             }
         case .image:
             if let imageData = item.content as? Data,

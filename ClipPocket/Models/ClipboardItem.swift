@@ -39,6 +39,7 @@ struct ClipboardItem: Identifiable, Codable {
         case phone = "phone"
         case json = "curlybraces"
         case file = "doc.fill"
+        case richText = "doc.richtext"
 
         var typeDisplayName: String {
             switch self {
@@ -51,6 +52,7 @@ struct ClipboardItem: Identifiable, Codable {
             case .phone: return "Phone"
             case .json: return "JSON"
             case .file: return "File"
+            case .richText: return "Rich Text"
             }
         }
     }
@@ -70,6 +72,12 @@ struct ClipboardItem: Identifiable, Codable {
                 return (path as NSString).lastPathComponent
             }
             return "File"
+        case .richText:
+            if let info = content as? [String: Any],
+               let plainText = info["plainText"] as? String {
+                return String(plainText.prefix(100))
+            }
+            return "Rich Text"
         }
     }
 
@@ -84,6 +92,7 @@ struct ClipboardItem: Identifiable, Codable {
         case .phone: return "Phone"
         case .json: return "JSON"
         case .file: return "File"
+        case .richText: return "Rich Text"
         }
     }
     
@@ -120,6 +129,14 @@ struct ClipboardItem: Identifiable, Codable {
                 return selfPath == otherPath
             }
             return false
+        case (.richText, .richText):
+            if let selfInfo = self.content as? [String: Any],
+               let otherInfo = other.content as? [String: Any],
+               let selfText = selfInfo["plainText"] as? String,
+               let otherText = otherInfo["plainText"] as? String {
+                return selfText == otherText
+            }
+            return false
         default:
             return false
         }
@@ -134,7 +151,7 @@ struct ClipboardItem: Identifiable, Codable {
         try container.encode(id, forKey: .id)
         try container.encode(type, forKey: .type)
         try container.encode(timestamp, forKey: .timestamp)
-        
+
         // Encode content based on type
         switch type {
         case .text, .code, .color, .url, .email, .phone, .json:
@@ -151,8 +168,18 @@ struct ClipboardItem: Identifiable, Codable {
             } else if let path = content as? String {
                 try container.encode(path, forKey: .content)
             }
+        case .richText:
+            if let info = content as? [String: Any] {
+                let payload = RichTextCodablePayload(
+                    rtfData: info["rtfData"] as? Data,
+                    htmlData: info["htmlData"] as? Data,
+                    plainText: (info["plainText"] as? String) ?? ""
+                )
+                let payloadData = try JSONEncoder().encode(payload)
+                try container.encode(payloadData, forKey: .content)
+            }
         }
-        
+
         // Only persist the lightweight bundle identifier. Icons are resolved lazily from cache.
         try container.encodeIfPresent(sourceBundleIdentifier, forKey: .sourceBundleIdentifier)
     }
@@ -162,7 +189,7 @@ struct ClipboardItem: Identifiable, Codable {
         id = try container.decode(UUID.self, forKey: .id)
         type = try container.decode(ItemType.self, forKey: .type)
         timestamp = try container.decode(Date.self, forKey: .timestamp)
-        
+
         // Decode content based on type
         switch type {
         case .text, .code, .color, .url, .email, .phone, .json:
@@ -179,12 +206,28 @@ struct ClipboardItem: Identifiable, Codable {
             } else {
                 content = URL(fileURLWithPath: "")
             }
+        case .richText:
+            if let payloadData = try container.decodeIfPresent(Data.self, forKey: .content),
+               let payload = try? JSONDecoder().decode(RichTextCodablePayload.self, from: payloadData) {
+                var info: [String: Any] = ["plainText": payload.plainText]
+                if let rtf = payload.rtfData { info["rtfData"] = rtf }
+                if let html = payload.htmlData { info["htmlData"] = html }
+                content = info
+            } else {
+                content = ["plainText": ""] as [String: Any]
+            }
         }
-        
+
         // Prefer new lightweight key; fall back to legacy field for backwards compatibility.
         sourceBundleIdentifier = try container.decodeIfPresent(String.self, forKey: .sourceBundleIdentifier)
             ?? container.decodeIfPresent(String.self, forKey: .sourceApplication)
     }
+}
+
+private struct RichTextCodablePayload: Codable {
+    let rtfData: Data?
+    let htmlData: Data?
+    let plainText: String
 }
 
 extension String {

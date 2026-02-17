@@ -2,6 +2,7 @@ import SwiftUI
 import AppKit
 
 struct ExcludedAppsView: View {
+    @Environment(\.dismiss) private var dismiss
     @ObservedObject private var excludedAppsManager = ExcludedAppsManager.shared
     @State private var runningApps: [RunningAppInfo] = []
 
@@ -16,9 +17,7 @@ struct ExcludedAppsView: View {
         VStack(spacing: 0) {
             // Header
             HStack {
-                Button(action: {
-                    // Navigate back
-                }) {
+                Button(action: { dismiss() }) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 14, weight: .semibold))
                 }

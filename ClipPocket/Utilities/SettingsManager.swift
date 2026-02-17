@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import SwiftUI
 
 class SettingsManager: ObservableObject {
     static let shared = SettingsManager()
@@ -18,6 +19,12 @@ class SettingsManager: ObservableObject {
         static let autoShowOnEdge = "autoShowOnEdge"
         static let autoShowDelay = "autoShowDelay"
         static let autoHideDelay = "autoHideDelay"
+        static let captureRichText = "captureRichText"
+        static let snippetsEnabled = "snippetsEnabled"
+        static let densityMode = "densityMode"
+        static let fontSizeScale = "fontSizeScale"
+        static let themeOverride = "themeOverride"
+        static let encryptHistory = "encryptHistory"
     }
     
     @Published var launchAtLogin: Bool {
@@ -80,9 +87,71 @@ class SettingsManager: ObservableObject {
         }
     }
 
+    @Published var captureRichText: Bool {
+        didSet {
+            defaults.set(captureRichText, forKey: Keys.captureRichText)
+        }
+    }
+
+    @Published var snippetsEnabled: Bool {
+        didSet {
+            defaults.set(snippetsEnabled, forKey: Keys.snippetsEnabled)
+        }
+    }
+
+    @Published var densityMode: String {
+        didSet {
+            defaults.set(densityMode, forKey: Keys.densityMode)
+        }
+    }
+
+    @Published var fontSizeScale: Double {
+        didSet {
+            defaults.set(fontSizeScale, forKey: Keys.fontSizeScale)
+        }
+    }
+
+    @Published var themeOverride: String {
+        didSet {
+            defaults.set(themeOverride, forKey: Keys.themeOverride)
+        }
+    }
+
+    @Published var encryptHistory: Bool {
+        didSet {
+            defaults.set(encryptHistory, forKey: Keys.encryptHistory)
+        }
+    }
+
     @Published var keyboardShortcut: KeyboardShortcut {
         didSet {
             persistKeyboardShortcut()
+        }
+    }
+
+    // MARK: - Appearance Computed Properties
+
+    var isCompact: Bool { densityMode == "compact" }
+    var cardWidth: CGFloat { isCompact ? 180 : 240 }
+    var cardHeight: CGFloat { isCompact ? 140 : 180 }
+    var cardHeaderHeight: CGFloat { isCompact ? 36 : 48 }
+    var cardCornerRadius: CGFloat { isCompact ? 10 : 12 }
+    var cardSpacing: CGFloat { isCompact ? 10 : 16 }
+    var panelHeight: CGFloat { isCompact ? 250 : 300 }
+    var pinnedCardWidth: CGFloat { isCompact ? 150 : 200 }
+    var pinnedCardHeight: CGFloat { isCompact ? 90 : 120 }
+    var emptyStateWidth: CGFloat { isCompact ? 190 : 250 }
+    var emptyStateHeight: CGFloat { isCompact ? 90 : 120 }
+
+    func scaledFont(_ baseSize: CGFloat) -> CGFloat {
+        baseSize * fontSizeScale
+    }
+
+    var resolvedColorScheme: ColorScheme? {
+        switch themeOverride {
+        case "dark": return .dark
+        case "light": return .light
+        default: return nil
         }
     }
     
@@ -153,6 +222,42 @@ class SettingsManager: ObservableObject {
             defaults.set(0.5, forKey: Keys.autoHideDelay)
         }
         self.autoHideDelay = defaults.double(forKey: Keys.autoHideDelay)
+
+        // Set default for captureRichText if not set (enabled by default)
+        if defaults.object(forKey: Keys.captureRichText) == nil {
+            defaults.set(true, forKey: Keys.captureRichText)
+        }
+        self.captureRichText = defaults.bool(forKey: Keys.captureRichText)
+
+        // Set default for snippetsEnabled if not set (enabled by default)
+        if defaults.object(forKey: Keys.snippetsEnabled) == nil {
+            defaults.set(true, forKey: Keys.snippetsEnabled)
+        }
+        self.snippetsEnabled = defaults.bool(forKey: Keys.snippetsEnabled)
+
+        // Set default for densityMode if not set
+        if defaults.object(forKey: Keys.densityMode) == nil {
+            defaults.set("comfortable", forKey: Keys.densityMode)
+        }
+        self.densityMode = defaults.string(forKey: Keys.densityMode) ?? "comfortable"
+
+        // Set default for fontSizeScale if not set
+        if defaults.object(forKey: Keys.fontSizeScale) == nil {
+            defaults.set(1.0, forKey: Keys.fontSizeScale)
+        }
+        self.fontSizeScale = defaults.double(forKey: Keys.fontSizeScale)
+
+        // Set default for themeOverride if not set
+        if defaults.object(forKey: Keys.themeOverride) == nil {
+            defaults.set("dark", forKey: Keys.themeOverride)
+        }
+        self.themeOverride = defaults.string(forKey: Keys.themeOverride) ?? "dark"
+
+        // Set default for encryptHistory if not set (disabled by default)
+        if defaults.object(forKey: Keys.encryptHistory) == nil {
+            defaults.set(false, forKey: Keys.encryptHistory)
+        }
+        self.encryptHistory = defaults.bool(forKey: Keys.encryptHistory)
     }
 
     private func persistKeyboardShortcut() {
@@ -173,5 +278,11 @@ class SettingsManager: ObservableObject {
         autoShowOnEdge = false
         autoShowDelay = 0.3
         autoHideDelay = 0.5
+        captureRichText = true
+        snippetsEnabled = true
+        densityMode = "comfortable"
+        fontSizeScale = 1.0
+        themeOverride = "dark"
+        encryptHistory = false
     }
 }

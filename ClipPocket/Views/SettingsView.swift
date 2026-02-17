@@ -5,6 +5,9 @@ struct SettingsView: View {
     @ObservedObject private var settingsManager = SettingsManager.shared
     @EnvironmentObject var appDelegate: AppDelegate
     @State private var showClearHistoryAlert = false
+    @State private var showEncryptionAlert = false
+    @State private var pendingEncryptionValue = false
+    @State private var showExcludedApps = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -294,6 +297,151 @@ struct SettingsView: View {
                                 description: "Display recent clipboard items section",
                                 toggle: $settingsManager.showRecent
                             )
+
+                            SettingRow(
+                                title: "Capture Rich Text",
+                                description: "Preserve formatting when copying from browsers and editors",
+                                toggle: $settingsManager.captureRichText
+                            )
+
+                            SettingRow(
+                                title: "Show Snippets",
+                                description: "Enable the snippets tab for reusable text templates",
+                                toggle: $settingsManager.snippetsEnabled
+                            )
+
+                            if settingsManager.snippetsEnabled {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Snippet Placeholders")
+                                        .font(.system(size: 12, weight: .medium))
+                                    Text("Use {name} syntax in your snippet templates to create fill-in fields. For example:")
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.secondary)
+                                    Text("Hi {name}, thanks for your email about {topic}.")
+                                        .font(.system(size: 11, design: .monospaced))
+                                        .foregroundColor(.purple)
+                                        .padding(8)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .background(Color.purple.opacity(0.08))
+                                        .cornerRadius(6)
+                                    Text("Each {placeholder} becomes a text field when you use the snippet.")
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.secondary)
+
+                                    Button(action: {
+                                        appDelegate.snippetManager.loadExamples()
+                                    }) {
+                                        HStack(spacing: 6) {
+                                            Image(systemName: "sparkles")
+                                            Text("Load Example Snippets")
+                                        }
+                                        .font(.system(size: 12, weight: .medium))
+                                        .frame(maxWidth: .infinity)
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .controlSize(.large)
+                                    .tint(.purple)
+                                }
+                                .padding(16)
+                                .background(Color(NSColor.controlBackgroundColor).opacity(0.3))
+                                .cornerRadius(8)
+                            }
+                        }
+                    }
+
+                    Divider()
+
+                    // Appearance Section
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Appearance")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.secondary)
+                            .textCase(.uppercase)
+
+                        VStack(spacing: 16) {
+                            // Density Mode
+                            HStack(alignment: .center, spacing: 16) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Density")
+                                        .font(.system(size: 14, weight: .medium))
+                                    Text("Compact uses smaller cards and tighter spacing")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.secondary)
+                                }
+                                Spacer()
+                                Picker("", selection: $settingsManager.densityMode) {
+                                    Text("Comfortable").tag("comfortable")
+                                    Text("Compact").tag("compact")
+                                }
+                                .pickerStyle(.segmented)
+                                .frame(width: 200)
+                            }
+                            .padding(16)
+                            .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                            .cornerRadius(8)
+
+                            // Font Size
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Font Size")
+                                            .font(.system(size: 14, weight: .medium))
+                                        Text("Adjust text size in clipboard cards")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(.secondary)
+                                    }
+                                    Spacer()
+                                    Text("\(Int(settingsManager.fontSizeScale * 100))%")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(.primary)
+                                }
+
+                                Slider(
+                                    value: $settingsManager.fontSizeScale,
+                                    in: 0.8...1.2,
+                                    step: 0.05
+                                )
+                                .controlSize(.small)
+
+                                HStack {
+                                    Text("Smaller")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(.secondary)
+                                    Spacer()
+                                    Text("Default")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(.secondary)
+                                    Spacer()
+                                    Text("Larger")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            .padding(16)
+                            .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                            .cornerRadius(8)
+
+                            // Theme Override
+                            HStack(alignment: .center, spacing: 16) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Theme")
+                                        .font(.system(size: 14, weight: .medium))
+                                    Text("Override system appearance for ClipPocket")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.secondary)
+                                }
+                                Spacer()
+                                Picker("", selection: $settingsManager.themeOverride) {
+                                    Text("System").tag("system")
+                                    Text("Dark").tag("dark")
+                                    Text("Light").tag("light")
+                                }
+                                .pickerStyle(.segmented)
+                                .frame(width: 200)
+                            }
+                            .padding(16)
+                            .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                            .cornerRadius(8)
                         }
                     }
 
@@ -313,6 +461,33 @@ struct SettingsView: View {
                                 toggle: $appDelegate.isIncognitoMode
                             )
 
+                            SettingRow(
+                                title: "Encrypt History",
+                                description: "Store clipboard data in an encrypted database",
+                                toggle: Binding(
+                                    get: { settingsManager.encryptHistory },
+                                    set: { newValue in
+                                        pendingEncryptionValue = newValue
+                                        showEncryptionAlert = true
+                                    }
+                                )
+                            )
+
+                            if settingsManager.encryptHistory {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "lock.shield.fill")
+                                        .foregroundColor(.green)
+                                        .font(.system(size: 14))
+                                    Text("Your clipboard history is encrypted with a key stored in your Keychain.")
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.secondary)
+                                }
+                                .padding(12)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color.green.opacity(0.08))
+                                .cornerRadius(8)
+                            }
+
                             VStack(alignment: .leading, spacing: 12) {
                                 Text("Excluded Applications")
                                     .font(.system(size: 14, weight: .medium))
@@ -320,7 +495,7 @@ struct SettingsView: View {
                                     .font(.system(size: 12))
                                     .foregroundColor(.secondary)
 
-                                NavigationLink(destination: ExcludedAppsView()) {
+                                Button(action: { showExcludedApps = true }) {
                                     HStack {
                                         Image(systemName: "shield.lefthalf.filled")
                                             .foregroundColor(.blue)
@@ -331,12 +506,16 @@ struct SettingsView: View {
                                             .foregroundColor(.secondary)
                                             .font(.system(size: 12))
                                     }
-                                    .padding(16)
-                                    .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
-                                    .cornerRadius(8)
+                                    .padding(10)
+                                    .background(Color(NSColor.controlBackgroundColor).opacity(0.3))
+                                    .cornerRadius(6)
+                                    .contentShape(Rectangle())
                                 }
                                 .buttonStyle(.plain)
                             }
+                            .padding(16)
+                            .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                            .cornerRadius(8)
                         }
                     }
 
@@ -393,6 +572,9 @@ struct SettingsView: View {
             }
         }
         .frame(width: 500, height: 600)
+        .onChange(of: settingsManager.densityMode) { _ in
+            appDelegate.refreshClipboardPanel()
+        }
         .alert("Clear Clipboard History", isPresented: $showClearHistoryAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Clear All", role: .destructive) {
@@ -400,6 +582,23 @@ struct SettingsView: View {
             }
         } message: {
             Text("Are you sure you want to clear all clipboard history? This action cannot be undone.")
+        }
+        .alert(
+            pendingEncryptionValue ? "Enable Encryption?" : "Disable Encryption?",
+            isPresented: $showEncryptionAlert
+        ) {
+            Button("Cancel", role: .cancel) { }
+            Button(pendingEncryptionValue ? "Enable" : "Disable", role: .destructive) {
+                appDelegate.switchEncryptionMode(encrypted: pendingEncryptionValue)
+            }
+        } message: {
+            Text(pendingEncryptionValue
+                 ? "Your history will be migrated to an encrypted file and the unencrypted copy will be deleted. If the app crashes during this process, data loss may occur. Consider exporting a backup first."
+                 : "Your history will be migrated to an unencrypted file and the encrypted copy will be deleted. If the app crashes during this process, data loss may occur. Consider exporting a backup first."
+            )
+        }
+        .sheet(isPresented: $showExcludedApps) {
+            ExcludedAppsView()
         }
     }
 

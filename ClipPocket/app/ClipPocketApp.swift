@@ -9,6 +9,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     @Published var clipboardItems: [ClipboardItem] = []
     @Published var isShowingSettings = true
     @Published var pinnedManager = PinnedClipboardManager()
+    @Published var snippetManager = SnippetManager()
     var timer: Timer?
     private var lastChangeCount: Int = 0
     private var isInternalCopy = false
@@ -114,10 +115,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     
     private var clipboardWindowFrame: NSRect?
     
+    /// Returns the screen that currently contains the mouse cursor.
+    private var activeScreen: NSScreen? {
+        NSScreen.screens.first(where: { $0.frame.contains(NSEvent.mouseLocation) }) ?? NSScreen.main
+    }
+
     func setupClipboardManager() {
-        let screenRect = NSScreen.main?.visibleFrame ?? .zero
+        let screenRect = activeScreen?.visibleFrame ?? .zero
         let windowWidth: CGFloat = screenRect.width - 10  // Wide screen with small padding
-        let windowHeight: CGFloat = 300
+        let windowHeight: CGFloat = settingsManager.panelHeight
 
         let xPosition = (screenRect.width - windowWidth) / 2
         let yPosition = screenRect.minY + 10  // 10px from bottom
@@ -133,6 +139,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
                 ClipboardManagerView()
                     .environmentObject(self)
                     .environmentObject(pinnedManager)
+                    .environmentObject(snippetManager)
             )
             hostingView.layer?.cornerRadius = 15
             window.contentView = hostingView
@@ -154,9 +161,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     }
 
     private var storedWindowFrame: NSRect {
-        let screenRect = NSScreen.main?.visibleFrame ?? .zero
+        let screenRect = activeScreen?.visibleFrame ?? .zero
         let windowWidth: CGFloat = screenRect.width - 10
-        let windowHeight: CGFloat = 300
+        let windowHeight: CGFloat = settingsManager.panelHeight
 
         let xPosition = (screenRect.width - windowWidth) / 2
         let yPosition = screenRect.minY + 10  // 10px from bottom
@@ -169,7 +176,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
         guard let window = clipboardWindowController?.window else { return }
 
-        let screenFrame = NSScreen.main?.visibleFrame ?? .zero
+        let screenFrame = activeScreen?.visibleFrame ?? .zero
         let originalFrame = storedWindowFrame
 
         // Ensure the window is within the screen bounds
@@ -223,7 +230,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
         guard let window = clipboardWindowController?.window else { return }
 
-        let screenFrame = NSScreen.main?.visibleFrame ?? .zero
+        let screenFrame = activeScreen?.visibleFrame ?? .zero
         let currentFrame = window.frame
 
         // Store the current frame for next time
@@ -330,6 +337,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         autoHideTimer = nil
     }
 
+    func resetDismissTimer() {
+        // Reset edge monitor hide timer
+        mouseEdgeMonitor?.resetHideTimer()
+        // Reset manual open auto-hide timer
+        if autoHideTimer != nil {
+            cancelAutoHideTimer()
+            startAutoHideTimer()
+        }
+    }
+
+    func pauseDismissTimer() {
+        mouseEdgeMonitor?.pauseHideTimer()
+        cancelAutoHideTimer()
+    }
+
     private func isMouseOverWindow() -> Bool {
         let mouseLocation = NSEvent.mouseLocation
 
@@ -413,7 +435,24 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         settingsWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
-    
+
+    func closeSettings() {
+        settingsWindow?.close()
+    }
+
+    func refreshClipboardPanel() {
+        guard let window = clipboardWindowController?.window else { return }
+        let wasVisible = isClipboardManagerVisible
+        if wasVisible {
+            hideClipboardManager()
+        }
+        // Update frame to new panel height
+        window.setFrame(storedWindowFrame, display: true)
+        if wasVisible {
+            showClipboardManager()
+        }
+    }
+
     func startMonitoringClipboard() {
         // Set initial change count
         lastChangeCount = NSPasteboard.general.changeCount
@@ -435,11 +474,64 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     }
 
     private func historyFileURL() -> URL? {
-        historyDirectoryURL?.appendingPathComponent("clipboardHistory.json")
+        if settingsManager.encryptHistory {
+            return historyDirectoryURL?.appendingPathComponent("clipboardHistory.encrypted")
+        }
+        return historyDirectoryURL?.appendingPathComponent("clipboardHistory.json")
     }
 
     private func legacyHistoryFileURL() -> URL? {
         historyDirectoryURL?.appendingPathComponent("ClipboardHistory.json")
+    }
+
+    private var unencryptedFileURL: URL? {
+        historyDirectoryURL?.appendingPathComponent("clipboardHistory.json")
+    }
+
+    private var encryptedFileURL: URL? {
+        historyDirectoryURL?.appendingPathComponent("clipboardHistory.encrypted")
+    }
+
+    /// Switch between encrypted and unencrypted databases.
+    /// Migrates data to the new format and removes the old file.
+    func switchEncryptionMode(encrypted: Bool) {
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .prettyPrinted
+
+            let itemsToSave = clipboardItems.prefix(500).filter { item in
+                if case .image = item.type,
+                   let imageData = item.content as? Data,
+                   imageData.count > 1_048_576 { return false }
+                return true
+            }
+
+            let jsonData = try encoder.encode(Array(itemsToSave))
+
+            if encrypted {
+                // Write encrypted file, then delete unencrypted
+                if let url = encryptedFileURL {
+                    let encData = try HistoryEncryptor.shared.encrypt(jsonData)
+                    try encData.write(to: url, options: .atomic)
+                }
+                if let url = unencryptedFileURL {
+                    try? FileManager.default.removeItem(at: url)
+                }
+            } else {
+                // Write unencrypted file, then delete encrypted
+                if let url = unencryptedFileURL {
+                    try jsonData.write(to: url, options: .atomic)
+                }
+                if let url = encryptedFileURL {
+                    try? FileManager.default.removeItem(at: url)
+                }
+            }
+
+            settingsManager.encryptHistory = encrypted
+            print("🔐 Switched to \(encrypted ? "encrypted" : "unencrypted") database (\(clipboardItems.count) items)")
+        } catch {
+            print("❌ Failed to switch encryption mode: \(error.localizedDescription)")
+        }
     }
 
     func loadPersistedClipboardHistory() {
@@ -483,6 +575,28 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             }
         }
 
+        // Recovery: if current mode's file is missing, try the other format
+        if !FileManager.default.fileExists(atPath: fileURL.path) {
+            let altURL = settingsManager.encryptHistory ? unencryptedFileURL : encryptedFileURL
+            if let altURL = altURL, FileManager.default.fileExists(atPath: altURL.path) {
+                print("⚠️ Current history file missing, recovering from \(altURL.lastPathComponent)")
+                do {
+                    var altData = try Data(contentsOf: altURL, options: .mappedIfSafe)
+                    // Decrypt if the alternate file is encrypted
+                    if !settingsManager.encryptHistory {
+                        altData = try HistoryEncryptor.shared.decrypt(altData)
+                    }
+                    let decoder = JSONDecoder()
+                    clipboardItems = try decoder.decode([ClipboardItem].self, from: altData)
+                    print("✅ Recovered \(clipboardItems.count) items from alternate file")
+                    saveClipboardHistory() // Save in current format
+                    return
+                } catch {
+                    print("❌ Recovery failed: \(error.localizedDescription)")
+                }
+            }
+        }
+
         // Check if file exists
         guard FileManager.default.fileExists(atPath: fileURL.path) else {
             print("No clipboard history file found")
@@ -501,8 +615,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             }
 
             // Use memory mapping to avoid loading the entire file into RAM at once
-            let data = try Data(contentsOf: fileURL, options: .mappedIfSafe)
+            var data = try Data(contentsOf: fileURL, options: .mappedIfSafe)
             print("📂 Loading clipboard history: \(data.count / 1024 / 1024)MB (mapped)")
+
+            // Decrypt if encrypted mode is enabled
+            if settingsManager.encryptHistory {
+                data = try HistoryEncryptor.shared.decrypt(data)
+                print("🔓 Decrypted clipboard history")
+            }
+
             let containsLegacyIcons = data.range(of: Data("\"sourceIcon\"".utf8)) != nil
 
             let decoder = JSONDecoder()
@@ -558,6 +679,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             return
         }
 
+        let shouldEncrypt = settingsManager.encryptHistory
+
         // Save asynchronously on background thread to avoid blocking UI
         DispatchQueue.global(qos: .utility).async { [weak self] in
             guard let self = self else { return }
@@ -578,7 +701,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
                     return true
                 }
 
-                let data = try encoder.encode(Array(itemsToSave))
+                var data = try encoder.encode(Array(itemsToSave))
+
+                if shouldEncrypt {
+                    data = try HistoryEncryptor.shared.encrypt(data)
+                    print("🔐 Encrypted \(itemsToSave.count) clipboard items (\(data.count / 1024)KB)")
+                }
+
                 try data.write(to: fileURL, options: .atomic)
                 print("✅ Saved \(itemsToSave.count) clipboard items to history (\(data.count / 1024)KB)")
             } catch {
@@ -614,7 +743,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
                 return true
             }
 
-            let data = try encoder.encode(Array(itemsToSave))
+            var data = try encoder.encode(Array(itemsToSave))
+
+            if settingsManager.encryptHistory {
+                data = try HistoryEncryptor.shared.encrypt(data)
+            }
+
             try data.write(to: fileURL, options: .atomic)
             print("✅ [SYNC] Saved \(itemsToSave.count) clipboard items to history (\(data.count / 1024)KB)")
         } catch {
@@ -659,6 +793,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
                 }
             case .file:
                 totalBytes += 1024 // Estimate for file path
+            case .richText:
+                if let info = item.content as? [String: Any] {
+                    if let rtf = info["rtfData"] as? Data { totalBytes += rtf.count }
+                    if let html = info["htmlData"] as? Data { totalBytes += html.count }
+                    if let text = info["plainText"] as? String { totalBytes += text.utf8.count }
+                }
             }
             // Add overhead for object structure (~2KB per item)
             totalBytes += 2048
@@ -671,8 +811,41 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL],
            let fileURL = urls.first,
            fileURL.isFileURL {
+            // If the file is an image, capture as image type with actual image data
+            let imageExtensions: Set<String> = ["png", "jpg", "jpeg", "gif", "bmp", "tiff", "tif", "webp", "heic", "heif"]
+            if imageExtensions.contains(fileURL.pathExtension.lowercased()),
+               let imageData = try? Data(contentsOf: fileURL),
+               let image = NSImage(data: imageData),
+               let compressedData = compressImage(image),
+               compressedData.count <= 1_048_576 {
+                print("🖼️ Detected image file copy: \(fileURL.lastPathComponent)")
+                return ClipboardItem(content: compressedData, type: .image, timestamp: Date(), sourceApplication: sourceApp)
+            }
             print("📁 Detected file copy: \(fileURL.path)")
             return ClipboardItem(content: fileURL, type: .file, timestamp: Date(), sourceApplication: sourceApp)
+        }
+
+        // Check for rich text (RTF or HTML) when enabled, or mixed content (text + embedded images)
+        do {
+            let rtfData = pasteboard.data(forType: .rtf)
+            let htmlData = pasteboard.data(forType: .html)
+            let plainText = pasteboard.string(forType: .string)
+
+            if (rtfData != nil || htmlData != nil),
+               let plainText = plainText,
+               !plainText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                // Always capture mixed content (embedded images in RTF/HTML) to preserve both text and images
+                let isMixed = hasMixedContent(rtfData: rtfData, htmlData: htmlData)
+                let isFormatted = settingsManager.captureRichText && hasSignificantFormatting(rtfData: rtfData, htmlData: htmlData)
+
+                if isMixed || isFormatted {
+                    var info: [String: Any] = ["plainText": plainText]
+                    if let rtf = rtfData { info["rtfData"] = rtf }
+                    if let html = htmlData { info["htmlData"] = html }
+                    print(isMixed ? "📝 Detected mixed content (text + images)" : "📝 Detected rich text copy")
+                    return ClipboardItem(content: info, type: .richText, timestamp: Date(), sourceApplication: sourceApp)
+                }
+            }
         }
 
         // Check for image
@@ -800,7 +973,55 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
         return .text
     }
-    
+
+    private func hasSignificantFormatting(rtfData: Data?, htmlData: Data?) -> Bool {
+        // Check RTF for actual formatting attributes
+        if let rtf = rtfData,
+           let attrStr = NSAttributedString(rtf: rtf, documentAttributes: nil) {
+            var hasFormatting = false
+            let range = NSRange(location: 0, length: min(attrStr.length, 500))
+            attrStr.enumerateAttributes(in: range) { attrs, _, stop in
+                if let font = attrs[.font] as? NSFont {
+                    let traits = font.fontDescriptor.symbolicTraits
+                    if traits.contains(.bold) || traits.contains(.italic) {
+                        hasFormatting = true
+                        stop.pointee = true
+                        return
+                    }
+                }
+                if attrs[.foregroundColor] != nil || attrs[.link] != nil ||
+                   attrs[.underlineStyle] != nil || attrs[.strikethroughStyle] != nil ||
+                   attrs[.attachment] != nil {
+                    hasFormatting = true
+                    stop.pointee = true
+                }
+            }
+            if hasFormatting { return true }
+        }
+
+        // Check HTML for actual formatting tags
+        if let html = htmlData,
+           let htmlStr = String(data: html, encoding: .utf8) {
+            let formattingTags = ["<b>", "<i>", "<strong>", "<em>", "<h1", "<h2", "<h3",
+                                  "<table", "<ul", "<ol", "<span style", "<font", "<mark", "<img"]
+            if formattingTags.contains(where: { htmlStr.localizedCaseInsensitiveContains($0) }) {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    private func hasMixedContent(rtfData: Data?, htmlData: Data?) -> Bool {
+        if let rtf = rtfData, let rtfStr = String(data: rtf, encoding: .ascii) {
+            if rtfStr.contains("\\pict") { return true }
+        }
+        if let html = htmlData, let htmlStr = String(data: html, encoding: .utf8) {
+            if htmlStr.contains("<img") { return true }
+        }
+        return false
+    }
+
     private var saveCounter = 0
 
     func addClipboardItem(_ item: ClipboardItem) {
@@ -864,6 +1085,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
                     pasteboard.writeObjects([fileURL as NSURL])
                 }
             }
+        case .richText:
+            if let info = item.content as? [String: Any] {
+                if let rtfData = info["rtfData"] as? Data {
+                    pasteboard.setData(rtfData, forType: .rtf)
+                }
+                if let htmlData = info["htmlData"] as? Data {
+                    pasteboard.setData(htmlData, forType: .html)
+                }
+                if let plainText = info["plainText"] as? String {
+                    pasteboard.setString(plainText, forType: .string)
+                }
+            }
         }
         animateStatusItemIcon()
         // Move the selected item to the top of the list
@@ -884,7 +1117,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
         // Only auto-paste textual content types to avoid unexpected behavior for non-text items.
         switch item.type {
-        case .text, .code, .color, .url, .email, .phone, .json:
+        case .text, .code, .color, .url, .email, .phone, .json, .richText:
             break
         default:
             return

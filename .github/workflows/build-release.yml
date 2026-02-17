@@ -52,4 +52,69 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: ClipPocket.dmg
-          generate_release_notes: true
+          body: |
+            ## What's New in v2.6.0
+
+            ### Snippet Manager
+            - Create and manage reusable text snippets with custom categories
+            - Placeholder support using `{placeholder}` syntax for fill-in templates
+            - Pre-loaded examples for emails, bug reports, and meeting notes
+            - Save any clipboard item as a snippet from the right-click menu
+
+            ### Encrypted History
+            - AES-256 encryption for your clipboard history stored on disk
+            - Encryption key stored securely in the app's sandboxed container
+            - Toggle encryption on/off from Settings with automatic data migration
+            - Warning prompts before switching to prevent accidental data loss
+
+            ### Rich Text & Mixed Content
+            - Capture formatted text (bold, italic, links, colors) from browsers and editors
+            - Mixed content support: text + embedded images are captured together
+            - Paste back preserves both text and images in apps like Word and Pages
+
+            ### Appearance Customization
+            - Density mode: switch between Comfortable and Compact layouts
+            - Font size scaling: adjust text size from 80% to 120%
+            - Theme override: force Dark, Light, or follow System appearance
+
+            ### Excluded Applications
+            - Prevent ClipPocket from monitoring specific apps
+            - Password managers pre-excluded by default (1Password, LastPass, Bitwarden, etc.)
+            - Manage exclusions from Settings with a simple toggle UI
+
+            ### Multi-Monitor Support
+            - ClipPocket panel now appears on whichever screen your mouse is on
+            - Auto-show on edge works on any connected monitor
+
+            ### Keyboard Navigation
+            - Ctrl+1 through Ctrl+0 to instantly copy items 1-10
+            - Arrow keys to navigate between items and sections
+            - Cmd+1-4 to jump between Pinned, Recent, History, and Snippets tabs
+            - Enter to copy, Delete to remove, Escape to close
+
+            ### Other Improvements
+            - Mouse wheel scrolling now works alongside trackpad for horizontal card navigation
+            - Image files from apps like Telegram are now captured as actual images, not file icons
+            - Excluded Apps section in Settings is now properly clickable
+            - Various UI polish and stability fixes
+
+            ---
+
+            ## All Features
+
+            - Clipboard history with up to 500 items, persisted across sessions
+            - Pin important items for quick access
+            - Auto-paste on selection into the previously focused app
+            - Auto-show panel on screen edge with configurable show/hide delays
+            - Global keyboard shortcut to toggle the panel
+            - Launch at login
+            - Full-text search with type filtering
+            - Smart content detection: URLs, emails, phone numbers, JSON, code, colors
+            - Text transformations: case conversion, naming conventions, whitespace control, Base64, JSON formatting
+            - Quick actions: save to file, generate QR code, share via macOS share sheet
+            - Drag and drop items to other apps
+            - Export and import clipboard history as JSON
+            - Incognito mode to temporarily pause monitoring
+            - Source app tracking with icons
+            - File copy detection from Finder
+            - Universal binary: runs natively on both Intel and Apple Silicon Macs

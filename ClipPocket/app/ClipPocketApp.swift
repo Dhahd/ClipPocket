@@ -499,7 +499,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             let encoder = JSONEncoder()
             encoder.outputFormatting = .prettyPrinted
 
-            let itemsToSave = clipboardItems.prefix(500).filter { item in
+            let itemsToSave = clipboardItems.prefix(settingsManager.effectiveHistoryLimit).filter { item in
                 if case .image = item.type,
                    let imageData = item.content as? Data,
                    imageData.count > 1_048_576 { return false }
@@ -647,11 +647,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
             print("🧹 Filtered \(loadedItems.count - filteredItems.count) large images")
 
-            // Apply hard limit - max 500 items
-            let maxItems = settingsManager.enableHistoryLimit
-                ? min(settingsManager.maxHistoryItems, 500)
-                : 500
-
+            // Honor the user-selected limit; when the toggle is off, keep everything.
+            let maxItems = settingsManager.effectiveHistoryLimit
             clipboardItems = Array(filteredItems.prefix(maxItems))
 
             let memoryEstimate = estimateMemoryUsage(clipboardItems)
@@ -690,7 +687,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
                 encoder.outputFormatting = .prettyPrinted
 
                 // Filter out items with large data (> 1MB per item) before saving
-                let itemsToSave = self.clipboardItems.prefix(500).filter { item in
+                let itemsToSave = self.clipboardItems.prefix(self.settingsManager.effectiveHistoryLimit).filter { item in
                     // Skip very large images
                     if case .image = item.type,
                        let imageData = item.content as? Data,
@@ -732,7 +729,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             encoder.outputFormatting = .prettyPrinted
 
             // Filter out items with large data (> 1MB per item) before saving
-            let itemsToSave = clipboardItems.prefix(500).filter { item in
+            let itemsToSave = clipboardItems.prefix(settingsManager.effectiveHistoryLimit).filter { item in
                 // Skip very large images
                 if case .image = item.type,
                    let imageData = item.content as? Data,
@@ -1031,15 +1028,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             if !self.clipboardItems.contains(where: { $0.isEqual(to: item) }) {
                 self.clipboardItems.insert(item, at: 0)
 
-                // Enforce hard limit during runtime to prevent unbounded memory growth
-                let hardLimit = self.settingsManager.enableHistoryLimit
-                    ? min(self.settingsManager.maxHistoryItems, 500)
-                    : 500  // Default max of 500 items for memory efficiency
-
-                if self.clipboardItems.count > hardLimit {
-                    let removedCount = self.clipboardItems.count - hardLimit
+                // Trim only when the user has an explicit limit; otherwise keep growing.
+                let hardLimit = self.settingsManager.effectiveHistoryLimit
+                if hardLimit != .max, self.clipboardItems.count > hardLimit {
                     self.clipboardItems = Array(self.clipboardItems.prefix(hardLimit))
-                    print("⚠️ Trimmed \(removedCount) old items (limit: \(hardLimit))")
                 }
 
                 print("Added new clipboard item: \(item.displayString)")

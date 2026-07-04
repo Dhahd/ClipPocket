@@ -621,9 +621,7 @@ struct SettingsView: View {
                     let data = try ClipboardBackupManager.shared.exportBackup(
                         history: appDelegate.clipboardItems,
                         pinned: appDelegate.pinnedManager.pinnedItems,
-                        maxHistory: appDelegate.settingsManager.enableHistoryLimit
-                            ? min(appDelegate.settingsManager.maxHistoryItems, 500)
-                            : 500,
+                        maxHistory: appDelegate.settingsManager.effectiveHistoryLimit,
                         maxPinned: 50
                     )
                     try data.write(to: url)
@@ -645,9 +643,7 @@ struct SettingsView: View {
                     let data = try Data(contentsOf: url)
                     let imported = try ClipboardBackupManager.shared.importBackup(
                         from: data,
-                        maxHistory: appDelegate.settingsManager.enableHistoryLimit
-                            ? min(appDelegate.settingsManager.maxHistoryItems, 500)
-                            : 500,
+                        maxHistory: appDelegate.settingsManager.effectiveHistoryLimit,
                         maxPinned: 50
                     )
                     appDelegate.clipboardItems = imported.history

@@ -2,7 +2,7 @@
 
 Your Smart Clipboard Manager for macOS
 
-<a href="https://trendshift.io/repositories/19844" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/19844/daily?language=Swift" alt="Dhahd%2FClipPocket | Trendshift" width="250" height="55"/></a>
+<a href="https://trendshift.io/repositories/19844" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/19844/daily?language=Swift" alt="Dhahd%2FClipPocket | Trendshift" width="250" height="55"/></a> <a href="https://trendshift.io/repositories/19844" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/19844/daily?language=Swift" alt="Dhahd%2FClipPocket | Trendshift" width="250" height="55"/></a>
 
 ## About
 

@@ -2,6 +2,8 @@
 
 Your Smart Clipboard Manager for macOS
 
+<a href="https://trendshift.io/repositories/19844" target="_blank"><img src="https://trendshift.io/api/badge/repositories/19844" alt="Dhahd%2FClipPocket | Trendshift" width="250" height="55"/></a>
+
 ## About
 
 ClipPocket is a powerful yet simple clipboard manager that keeps track of everything you copy. Never lose important snippets again!

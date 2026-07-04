@@ -69,6 +69,21 @@ class SettingsManager: ObservableObject {
         }
     }
 
+    /// Resolved history cap actually enforced at runtime.
+    /// When the user disables the limit, this is `.max` (no application-level cap);
+    /// memory pressure is managed by the per-item image filter, not a count ceiling.
+    var effectiveHistoryLimit: Int {
+        Self.effectiveHistoryLimit(
+            enableHistoryLimit: enableHistoryLimit,
+            maxHistoryItems: maxHistoryItems
+        )
+    }
+
+    static func effectiveHistoryLimit(enableHistoryLimit: Bool, maxHistoryItems: Int) -> Int {
+        guard enableHistoryLimit else { return .max }
+        return max(1, maxHistoryItems)
+    }
+
     @Published var autoShowOnEdge: Bool {
         didSet {
             defaults.set(autoShowOnEdge, forKey: Keys.autoShowOnEdge)
